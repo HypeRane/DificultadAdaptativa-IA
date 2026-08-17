@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using UnityEngine;
 
 public class DifficultyManager : MonoBehaviour
@@ -36,6 +38,8 @@ public class DifficultyManager : MonoBehaviour
     private int damageTakenThisWindow;
     private float evaluationTimer;
 
+    private string logFilePath;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -49,6 +53,21 @@ public class DifficultyManager : MonoBehaviour
         EnemySpeed = startEnemySpeed;
         EnemyHealth = startEnemyHealth;
         EnemyContactDamage = startEnemyDamage;
+
+        SetupLogFile();
+    }
+
+    private void SetupLogFile()
+    {
+        logFilePath = Path.Combine(Application.persistentDataPath, "difficulty_sessions.csv");
+
+        if (!File.Exists(logFilePath))
+        {
+            string header = "timestamp,elapsed_seconds,kills_window,damage_taken_window,shots_fired_total,shots_hit_total,accuracy_total,performance_score,spawn_interval,enemy_speed,enemy_health\n";
+            File.WriteAllText(logFilePath, header);
+        }
+
+        Debug.Log($"[Dificultad] Guardando datos de sesión en: {logFilePath}");
     }
 
     private void Update()
@@ -96,8 +115,24 @@ public class DifficultyManager : MonoBehaviour
         float accuracy = shotsFired > 0 ? (float)shotsHit / shotsFired : 0f;
         Debug.Log($"[Dificultad] Score ventana: {performanceScore} | Precisión total: {accuracy:P0} | SpawnInterval: {SpawnInterval:F2} | EnemySpeed: {EnemySpeed:F2} | EnemyHealth: {EnemyHealth}");
 
+        LogEvaluation(performanceScore, accuracy);
+
         killsThisWindow = 0;
         damageTakenThisWindow = 0;
+    }
+
+    private void LogEvaluation(float performanceScore, float accuracy)
+    {
+        string row = $"{DateTime.Now:O},{Time.time:F1},{killsThisWindow},{damageTakenThisWindow},{shotsFired},{shotsHit},{accuracy:F2},{performanceScore:F2},{SpawnInterval:F2},{EnemySpeed:F2},{EnemyHealth}\n";
+
+        try
+        {
+            File.AppendAllText(logFilePath, row);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"No se pudo escribir el log de dificultad: {e.Message}");
+        }
     }
 
     private void IncreaseDifficulty()
