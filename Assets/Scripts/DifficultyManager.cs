@@ -27,6 +27,13 @@ public class DifficultyManager : MonoBehaviour
     public int EnemyHealth { get; private set; }
     public int EnemyContactDamage { get; private set; }
 
+    // Nivel demostrativo (1-10) para mostrar en el HUD, junto con un evento para avisar cambios
+    public int DifficultyLevel { get; private set; } = 1;
+    public float Accuracy => shotsFired > 0 ? (float)shotsHit / shotsFired : 0f;
+    public int TotalKills => kills;
+
+    public event Action<bool> OnDifficultyChanged; // true = subió, false = bajó
+
     // Métricas totales de la sesión
     private int kills;
     private int damageTaken;
@@ -140,6 +147,9 @@ public class DifficultyManager : MonoBehaviour
         SpawnInterval = Mathf.Max(minSpawnInterval, SpawnInterval * 0.85f);
         EnemySpeed = Mathf.Min(maxEnemySpeed, EnemySpeed * 1.1f);
         EnemyHealth = Mathf.Min(maxEnemyHealth, Mathf.RoundToInt(EnemyHealth * 1.15f));
+
+        DifficultyLevel = Mathf.Min(10, DifficultyLevel + 1);
+        OnDifficultyChanged?.Invoke(true);
     }
 
     private void DecreaseDifficulty()
@@ -147,5 +157,8 @@ public class DifficultyManager : MonoBehaviour
         SpawnInterval = Mathf.Min(maxSpawnInterval, SpawnInterval * 1.15f);
         EnemySpeed = Mathf.Max(1f, EnemySpeed * 0.9f);
         EnemyHealth = Mathf.Max(10, Mathf.RoundToInt(EnemyHealth * 0.9f));
+
+        DifficultyLevel = Mathf.Max(1, DifficultyLevel - 1);
+        OnDifficultyChanged?.Invoke(false);
     }
 }

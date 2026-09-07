@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class EnemySpawner : MonoBehaviour
@@ -27,7 +28,28 @@ public class EnemySpawner : MonoBehaviour
         if (enemyPrefab == null) return;
 
         Vector2 spawnPos = GetRandomPointOnCircle(spawnRadius);
-        Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+        GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+
+        Enemy enemy = enemyObj.GetComponent<Enemy>();
+        if (enemy != null)
+        {
+            enemy.ApplyArchetype(PickEnemyKind());
+            enemy.BeginSpawnAnimation();
+        }
+    }
+
+    // La variedad de enemigos se va desbloqueando junto con el nivel de dificultad de la IA:
+    // al principio solo aparecen Rastreadores, y con el tiempo se suman Corredores, Tiradores y Brutos.
+    private EnemyKind PickEnemyKind()
+    {
+        int level = DifficultyManager.Instance != null ? DifficultyManager.Instance.DifficultyLevel : 1;
+
+        List<EnemyKind> pool = new List<EnemyKind> { EnemyKind.Normal, EnemyKind.Normal, EnemyKind.Normal };
+        if (level >= 2) pool.Add(EnemyKind.Fast);
+        if (level >= 3) pool.Add(EnemyKind.Ranged);
+        if (level >= 4) pool.Add(EnemyKind.Tank);
+
+        return pool[Random.Range(0, pool.Count)];
     }
 
     private Vector2 GetRandomPointOnCircle(float radius)
