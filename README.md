@@ -74,6 +74,11 @@ Cada evaluación se guarda en un CSV local (`difficulty_sessions.csv`, en la car
 - [x] Logging de datos de sesión a CSV
 - [x] HUD en pantalla mostrando la dificultad ajustándose en vivo
 - [x] Sistema de armas, mascota aliada y variedad de enemigos
+- [ ] Jefes cada cierto nivel de dificultad / tiempo, con HUD de encuentro especial
+- [ ] Sistema de perks tipo roguelite (elegir mejora al subir de nivel o matar un jefe)
+- [ ] Audio: SFX generados por código para disparos, impactos, pickups y cambios de dificultad
+- [ ] Menú principal + high score guardado localmente
+- [ ] Tinte/iluminación de escena que reacciona al nivel de dificultad (usando la Global Light 2D)
 - [ ] Análisis exploratorio de los datos con Python
 - [ ] Modelo de ML que prediga el nivel de habilidad del jugador
 - [ ] Build jugable en itch.io
