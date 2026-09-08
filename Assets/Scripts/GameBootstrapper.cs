@@ -1,12 +1,27 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
-// Crea en tiempo de ejecución todo lo que el juego necesita (HUD, GameManager, fondo) sin tocar la escena a mano.
-// Así funciona apenas se presiona Play, sin importar qué objetos haya en SampleScene.
+// Crea en tiempo de ejecución todo lo que el juego necesita (HUD, GameManager, fondo, spawners)
+// sin tocar la escena a mano. RuntimeInitializeOnLoadMethod solo corre UNA vez por sesión de
+// juego (no una vez por escena), así que además nos suscribimos a sceneLoaded para que todo se
+// vuelva a construir cada vez que se recarga la escena (por ejemplo, al reiniciar tras morir).
 public static class GameBootstrapper
 {
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        BuildEverything();
+    }
+
+    private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        BuildEverything();
+    }
+
+    private static void BuildEverything()
     {
         if (GameManager.Instance == null)
         {
@@ -16,6 +31,11 @@ public static class GameBootstrapper
         if (SoundManager.Instance == null)
         {
             new GameObject("SoundManager").AddComponent<SoundManager>();
+        }
+
+        if (PlayerTelemetryTracker.Instance == null)
+        {
+            new GameObject("PlayerTelemetryTracker").AddComponent<PlayerTelemetryTracker>();
         }
 
         if (Object.FindAnyObjectByType<EventSystem>() == null)
@@ -28,11 +48,6 @@ public static class GameBootstrapper
         if (Object.FindAnyObjectByType<ArenaBackground>() == null)
         {
             new GameObject("ArenaBackground").AddComponent<ArenaBackground>();
-        }
-
-        if (Object.FindAnyObjectByType<ObstacleField>() == null)
-        {
-            new GameObject("ObstacleField").AddComponent<ObstacleField>();
         }
 
         if (Object.FindAnyObjectByType<DifficultyAmbiance>() == null)

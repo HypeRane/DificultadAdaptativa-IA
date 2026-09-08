@@ -4,8 +4,8 @@ using UnityEngine;
 // combo altas (se suscribe a GameManager.OnComboMilestone).
 public class PetPickupSpawner : MonoBehaviour
 {
-    [SerializeField] private float randomInterval = 45f;
-    [SerializeField] private float minDistanceFromCenter = 2.5f;
+    [SerializeField] private float randomInterval = 55f;
+    [SerializeField] private int maxConcurrentPickups = 1;
 
     private float timer;
 
@@ -27,11 +27,16 @@ public class PetPickupSpawner : MonoBehaviour
 
     private void Update()
     {
+        // Mismo criterio de riesgo/recompensa que WeaponPickupSpawner: el dron aparece antes si
+        // el jugador la está pasando mal.
+        float skill = DifficultyManager.Instance != null ? DifficultyManager.Instance.SkillFactor : 0.5f;
+        float intervalScale = Mathf.Lerp(0.65f, 1.1f, skill);
+
         timer += Time.deltaTime;
-        if (timer >= randomInterval)
+        if (timer >= randomInterval * intervalScale)
         {
             timer = 0f;
-            SpawnAt(MapUtility.RandomPointInPlayArea(minDistanceFromCenter));
+            SpawnAt(MapUtility.RandomPointAboveCamera());
         }
     }
 
@@ -42,6 +47,8 @@ public class PetPickupSpawner : MonoBehaviour
 
     private void SpawnAt(Vector2 pos)
     {
+        if (Object.FindObjectsByType<PetPickup>(FindObjectsSortMode.None).Length >= maxConcurrentPickups) return;
+
         GameObject obj = new GameObject("PetPickup");
         obj.transform.position = pos;
         obj.AddComponent<PetPickup>();

@@ -43,7 +43,7 @@ public class BossDirector : MonoBehaviour
         float baseSpeed = dm != null ? dm.EnemySpeed : 2f;
         int baseDamage = dm != null ? dm.EnemyContactDamage : 10;
 
-        Vector2 spawnPos = MapUtility.RandomPointInPlayArea(9f, 1f);
+        Vector2 spawnPos = MapUtility.RandomPointAboveCamera(3f, 0.5f);
 
         GameObject bossObj = new GameObject("Boss");
         bossObj.transform.position = spawnPos;
@@ -65,11 +65,12 @@ public class BossDirector : MonoBehaviour
             Mathf.RoundToInt(baseHealth * (6f + bossNumber * 2f)),
             baseSpeed * 0.6f,
             Mathf.RoundToInt(baseDamage * 1.8f),
-            new Color(0.75f, 0.1f, 0.15f));
+            new Color(0.6f, 0.1f, 0.75f)); // violeta alienígena, referencia a Tomator
         enemy.BeginSpawnAnimation();
 
         BossController controller = bossObj.AddComponent<BossController>();
-        controller.Init(enemy, $"JEFE {bossNumber}");
+        string bossName = bossNumber == 1 ? "TOMATOR" : $"TOMATOR MK-{bossNumber}";
+        controller.Init(enemy, bossName);
 
         HUDController.Instance?.ShowBossBar(enemy, controller.DisplayName);
     }

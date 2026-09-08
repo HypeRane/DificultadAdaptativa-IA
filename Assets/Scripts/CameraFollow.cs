@@ -1,11 +1,12 @@
 using UnityEngine;
 
+// Shmup vertical: la cámara ya no sigue al jugador, hace scroll automático y continuo hacia
+// arriba a X fija. El jugador se mueve libre dentro de un área acotada relativa a la cámara
+// (ver PlayerMovement.ClampToScreen).
 public class CameraFollow : MonoBehaviour
 {
-    [SerializeField] private Transform target; // arrastra el Player acá
-    [SerializeField] private float smoothSpeed = 5f;
-    [SerializeField] private Vector3 offset = new Vector3(0f, 0f, -10f); // -10 en Z para que la cámara 2D quede detrás
-    [SerializeField] private float orthographicSize = 7.5f; // más grande = menos zoom, se ve más mapa
+    [SerializeField] private float scrollSpeed = 2f; // unidades de mundo por segundo
+    [SerializeField] private float orthographicSize = 7.5f;
 
     private static CameraFollow instance;
 
@@ -18,23 +19,28 @@ public class CameraFollow : MonoBehaviour
         instance = this;
 
         Camera cam = GetComponent<Camera>();
-        if (cam != null) cam.orthographicSize = orthographicSize;
+        if (cam != null)
+        {
+            cam.orthographicSize = orthographicSize;
+            cam.backgroundColor = new Color(0.01f, 0.02f, 0.015f, 1f);
+        }
     }
 
     private void LateUpdate()
     {
-        if (target == null) return;
-
-        Vector3 desiredPosition = target.position + offset;
-        transform.position = Vector3.Lerp(transform.position, desiredPosition, smoothSpeed * Time.deltaTime);
+        Vector3 pos = transform.position;
+        pos.x = 0f;
+        pos.y += scrollSpeed * Time.deltaTime;
 
         if (shakeTimeRemaining > 0f)
         {
             shakeTimeRemaining -= Time.deltaTime;
             float damper = Mathf.Clamp01(shakeTimeRemaining / shakeDuration);
             Vector2 shakeOffset = Random.insideUnitCircle * shakeMagnitude * damper;
-            transform.position += new Vector3(shakeOffset.x, shakeOffset.y, 0f);
+            pos += new Vector3(shakeOffset.x, shakeOffset.y, 0f);
         }
+
+        transform.position = pos;
     }
 
     // Sacude la cámara brevemente (golpes recibidos, enemigos muertos, etc).

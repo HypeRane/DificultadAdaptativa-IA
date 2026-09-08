@@ -55,7 +55,7 @@ public static class PerkDatabase
         },
         new PerkDefinition
         {
-            Name = "Mascota entrenada", Description = "+35% de daño de tu mascota",
+            Name = "Dron mejorado", Description = "+35% de daño de tus drones",
             Color = new Color(0.85f, 0.4f, 1f),
             Apply = _ => PerkEffects.PetDamageMultiplier *= 1.35f
         },

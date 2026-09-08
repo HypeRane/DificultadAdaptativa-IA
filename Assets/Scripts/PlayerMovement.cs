@@ -1,12 +1,13 @@
 using UnityEngine;
 
+// Shmup vertical: la nave se mueve libre con WASD dentro del área visible de la cámara (que hace
+// scroll continuo hacia arriba). Ya no apunta con el mouse — dispara siempre hacia arriba
+// (ver PlayerShooting), así que el indicador visual del arma también apunta fijo hacia arriba.
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
-
-    [Header("Aiming")]
-    [SerializeField] private Transform aimPivot; // objeto hijo que apunta visualmente hacia el mouse (ej: el sprite del arma)
+    [SerializeField] private float edgeMargin = 0.6f; // margen respecto al borde de la pantalla
 
     public SpriteRenderer WeaponSpriteRenderer { get; private set; }
 
@@ -31,25 +32,20 @@ public class PlayerMovement : MonoBehaviour
 
         BuildGlow();
 
-        // Si no se asignó un pivote de apuntado en el Inspector, se crea uno solo
-        // (una barra que atraviesa al jugador) para que siempre haya indicador visual de aim.
-        if (aimPivot == null)
-        {
-            aimPivot = BuildAimIndicator();
-        }
+        Transform aimPivot = BuildAimIndicator();
         WeaponSpriteRenderer = aimPivot.GetComponent<SpriteRenderer>();
     }
 
     private void Update()
     {
         ReadMovementInput();
-        AimTowardMouse();
     }
 
     private void FixedUpdate()
     {
         // El movimiento físico va en FixedUpdate, no en Update, para que sea consistente sin importar el framerate
-        rb.MovePosition(rb.position + moveInput * moveSpeed * PerkEffects.MoveSpeedMultiplier * Time.fixedDeltaTime);
+        Vector2 targetPos = rb.position + moveInput * moveSpeed * PerkEffects.MoveSpeedMultiplier * Time.fixedDeltaTime;
+        rb.MovePosition(ClampToScreen(targetPos));
     }
 
     private void ReadMovementInput()
@@ -59,16 +55,19 @@ public class PlayerMovement : MonoBehaviour
         moveInput = new Vector2(x, y).normalized;   // normalizado para que la diagonal no sea más rápida
     }
 
-    private void AimTowardMouse()
+    // La nave no puede salirse del área visible de la cámara, que a su vez hace scroll continuo
+    // hacia arriba — así siempre estás "dentro de pantalla", como en un shmup vertical clásico.
+    private Vector2 ClampToScreen(Vector2 pos)
     {
-        if (aimPivot == null || cam == null) return;
+        if (cam == null) return pos;
 
-        Vector3 mouseWorldPos = cam.ScreenToWorldPoint(Input.mousePosition);
-        mouseWorldPos.z = 0f;
+        float halfHeight = Mathf.Max(0.5f, cam.orthographicSize - edgeMargin);
+        float halfWidth = Mathf.Max(0.5f, halfHeight * cam.aspect - edgeMargin);
+        Vector3 camPos = cam.transform.position;
 
-        Vector2 direction = mouseWorldPos - transform.position;
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        aimPivot.rotation = Quaternion.Euler(0f, 0f, angle);
+        pos.x = Mathf.Clamp(pos.x, camPos.x - halfWidth, camPos.x + halfWidth);
+        pos.y = Mathf.Clamp(pos.y, camPos.y - halfHeight, camPos.y + halfHeight);
+        return pos;
     }
 
     private void BuildGlow()
@@ -89,8 +88,8 @@ public class PlayerMovement : MonoBehaviour
     {
         GameObject indicator = new GameObject("AimIndicator");
         indicator.transform.SetParent(transform, false);
-        indicator.transform.localPosition = Vector3.zero;
-        indicator.transform.localScale = new Vector3(0.9f, 0.16f, 1f);
+        indicator.transform.localPosition = new Vector3(0f, 0.3f, 0f);
+        indicator.transform.localScale = new Vector3(0.16f, 0.85f, 1f); // barra vertical: apunta fijo hacia arriba
 
         SpriteRenderer indicatorSr = indicator.AddComponent<SpriteRenderer>();
         indicatorSr.sprite = ProceduralSprites.Square;

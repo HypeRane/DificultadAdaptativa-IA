@@ -1,23 +1,31 @@
 using UnityEngine;
 
-// Punto aleatorio dentro del área jugable visible (según el tamaño real de la cámara), para que
-// obstáculos y recogibles se repartan por todo el mapa y no se amontonen cerca del centro.
+// Utilidad de spawn para el shmup vertical: un punto aleatorio arriba del borde superior de la
+// cámara (que hace scroll continuo), para que enemigos, el jefe y los recogibles entren en
+// pantalla desde arriba en vez de aparecer de la nada frente al jugador.
 public static class MapUtility
 {
-    public static Vector2 RandomPointInPlayArea(float minDistanceFromCenter = 0f, float boundsMultiplier = 1.15f)
+    public static Vector2 RandomPointAboveCamera(float margin = 2f, float widthFraction = 0.85f)
     {
         Camera cam = Camera.main;
-        float halfHeight = cam != null ? cam.orthographicSize * boundsMultiplier : 8f;
+        float halfHeight = cam != null ? cam.orthographicSize : 7.5f;
         float halfWidth = cam != null ? halfHeight * cam.aspect : 12f;
+        Vector3 camPos = cam != null ? cam.transform.position : Vector3.zero;
 
-        Vector2 candidate;
-        int attempts = 0;
-        do
+        for (int attempt = 0; attempt < 10; attempt++)
         {
-            candidate = new Vector2(Random.Range(-halfWidth, halfWidth), Random.Range(-halfHeight, halfHeight));
-            attempts++;
-        } while (candidate.magnitude < minDistanceFromCenter && attempts < 12);
+            float x = Random.Range(camPos.x - halfWidth * widthFraction, camPos.x + halfWidth * widthFraction);
+            float y = camPos.y + halfHeight + margin;
+            Vector2 candidate = new Vector2(x, y);
+            if (!IsInsideObstacle(candidate)) return candidate;
+        }
 
-        return candidate;
+        return new Vector2(camPos.x, camPos.y + halfHeight + margin);
+    }
+
+    private static bool IsInsideObstacle(Vector2 point)
+    {
+        Collider2D hit = Physics2D.OverlapPoint(point);
+        return hit != null && hit.GetComponent<ObstacleMarker>() != null;
     }
 }

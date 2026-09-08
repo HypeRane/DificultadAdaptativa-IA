@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // Construye y maneja todo el HUD por código: vida, puntaje/combo, panel de telemetría de la
-// IA de dificultad (el objetivo demostrativo del proyecto), crosshair, avisos y pantalla de game over.
+// IA de dificultad (el objetivo demostrativo del proyecto), avisos y pantalla de game over.
 public class HUDController : MonoBehaviour
 {
     public static HUDController Instance { get; private set; }
@@ -46,8 +46,6 @@ public class HUDController : MonoBehaviour
     private Image damageFlashImage;
     private float damageFlashTimer;
 
-    // Crosshair
-    private RectTransform crosshair;
 
     // Aviso inicial de controles
     private CanvasGroup tipGroup;
@@ -148,7 +146,6 @@ public class HUDController : MonoBehaviour
     private void Update()
     {
         UpdateBossBar();
-        UpdateCrosshair();
         AnimateHealthBars();
         UpdateTimeText();
         PollDifficultyStats();
@@ -183,7 +180,6 @@ public class HUDController : MonoBehaviour
         BuildScorePanel(canvasRect);
         BuildDifficultyPanel(canvasRect);
         BuildToast(canvasRect);
-        BuildCrosshair(canvasRect);
         BuildTip(canvasRect);
         BuildDamageOverlay(canvasRect);
         BuildFloatingLayer(canvasRect);
@@ -336,23 +332,13 @@ public class HUDController : MonoBehaviour
         Anchor(toastText.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
     }
 
-    private void BuildCrosshair(Transform parent)
-    {
-        crosshair = UIKit.CreateUIObject("Crosshair", parent);
-        Anchor(crosshair, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30, 30));
-        Image img = crosshair.gameObject.AddComponent<Image>();
-        img.sprite = ProceduralSprites.Ring;
-        img.color = new Color(1f, 1f, 1f, 0.85f);
-        img.raycastTarget = false;
-    }
-
     private void BuildTip(Transform parent)
     {
         RectTransform tipRt = UIKit.CreateUIObject("Tip", parent);
         Anchor(tipRt, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(900, 30));
         tipGroup = tipRt.gameObject.AddComponent<CanvasGroup>();
 
-        Text tip = UIKit.CreateText("Text", tipRt, "WASD: moverte    Click: disparar    1-4: cambiar de arma    R: reiniciar al morir", 18, new Color(1f, 1f, 1f, 0.85f), TextAnchor.MiddleCenter);
+        Text tip = UIKit.CreateText("Text", tipRt, "WASD: moverte    Click: disparar    1-5: cambiar de arma    R: reiniciar al morir", 18, new Color(1f, 1f, 1f, 0.85f), TextAnchor.MiddleCenter);
         Anchor(tip.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
     }
 
@@ -467,19 +453,13 @@ public class HUDController : MonoBehaviour
         Button playButton = UIKit.CreateButton("PlayButton", root, "JUGAR", new Color(0.25f, 0.65f, 0.35f), new Vector2(260, 70), HandlePlayClicked);
         Anchor(playButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -60), new Vector2(260, 70));
 
-        Text tip = UIKit.CreateText("Tip", root, "WASD: moverte  ·  Click: disparar  ·  1-4: cambiar de arma  ·  R: reiniciar al morir", 16, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleCenter);
+        Text tip = UIKit.CreateText("Tip", root, "WASD: moverte  ·  Click: disparar  ·  1-5: cambiar de arma  ·  R: reiniciar al morir", 16, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleCenter);
         Anchor(tip.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 50), new Vector2(900, 30));
 
         mainMenuPanel.SetActive(false);
     }
 
     // ---------- Lógica de actualización ----------
-
-    private void UpdateCrosshair()
-    {
-        if (crosshair == null) return;
-        crosshair.position = Input.mousePosition;
-    }
 
     private void AnimateHealthBars()
     {

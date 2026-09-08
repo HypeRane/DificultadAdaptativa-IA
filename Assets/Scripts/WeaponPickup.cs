@@ -46,6 +46,14 @@ public class WeaponPickup : MonoBehaviour
         pos.y = baseY + Mathf.Sin(bobTimer * 3f) * 0.15f;
         transform.position = pos;
         transform.Rotate(0f, 0f, 60f * Time.deltaTime);
+
+        // Si el scroll de la cámara lo dejó atrás sin que lo agarraras, se limpia — si no, un
+        // recogible perdido ocuparía el cupo de WeaponPickupSpawner para siempre.
+        Camera cam = Camera.main;
+        if (cam != null && transform.position.y < cam.transform.position.y - cam.orthographicSize * 1.5f)
+        {
+            Destroy(gameObject);
+        }
     }
 
     private void OnTriggerEnter2D(Collider2D other)

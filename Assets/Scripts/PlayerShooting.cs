@@ -10,7 +10,9 @@ public class PlayerShooting : MonoBehaviour
 
     public event Action<WeaponKind, int> OnWeaponChanged; // arma actual, munición restante (-1 = infinita)
 
-    private Camera cam;
+    private static readonly Vector2 FireDirection = Vector2.up; // shmup vertical: siempre dispara hacia arriba
+    private const float FireAngleDegrees = 90f; // ángulo de Vector2.up en grados (para el spread de perdigones)
+
     private PlayerMovement playerMovement;
     private WeaponKind currentWeapon = WeaponKind.Pistol;
     private readonly Dictionary<WeaponKind, int> ammo = new Dictionary<WeaponKind, int>();
@@ -20,7 +22,6 @@ public class PlayerShooting : MonoBehaviour
 
     private void Awake()
     {
-        cam = Camera.main;
         playerMovement = GetComponent<PlayerMovement>();
 
         foreach (WeaponKind kind in Enum.GetValues(typeof(WeaponKind)))
@@ -72,6 +73,7 @@ public class PlayerShooting : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha2)) SwitchTo(WeaponKind.Shotgun);
         if (Input.GetKeyDown(KeyCode.Alpha3)) SwitchTo(WeaponKind.Flamethrower);
         if (Input.GetKeyDown(KeyCode.Alpha4)) SwitchTo(WeaponKind.RocketLauncher);
+        if (Input.GetKeyDown(KeyCode.Alpha5)) SwitchTo(WeaponKind.Sniper);
     }
 
     private void FireDiscrete(WeaponStats stats)
@@ -80,8 +82,7 @@ public class PlayerShooting : MonoBehaviour
         PlayShootSound(stats.Kind);
 
         Vector3 spawnPos = firePoint != null ? firePoint.position : transform.position;
-        Vector2 baseDir = GetDirectionToMouse(spawnPos);
-        float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+        float baseAngle = FireAngleDegrees;
 
         int damage = Mathf.RoundToInt(stats.Damage * PerkEffects.DamageMultiplier);
 
@@ -117,7 +118,7 @@ public class PlayerShooting : MonoBehaviour
         DifficultyManager.Instance?.RegisterShotFired();
 
         Vector3 origin = firePoint != null ? firePoint.position : transform.position;
-        Vector2 baseDir = GetDirectionToMouse(origin);
+        Vector2 baseDir = FireDirection;
         int damage = Mathf.RoundToInt(stats.Damage * PerkEffects.DamageMultiplier);
 
         Collider2D[] hits = Physics2D.OverlapCircleAll(origin, stats.Range);
@@ -152,6 +153,9 @@ public class PlayerShooting : MonoBehaviour
                 break;
             case WeaponKind.RocketLauncher:
                 SoundManager.Play(Sfx.RocketShoot);
+                break;
+            case WeaponKind.Sniper:
+                SoundManager.Play(Sfx.Shoot, 0.9f, 0.6f);
                 break;
             default:
                 SoundManager.Play(Sfx.Shoot, 0.7f, UnityEngine.Random.Range(0.95f, 1.05f));
@@ -206,27 +210,25 @@ public class PlayerShooting : MonoBehaviour
         SpriteRenderer sr = playerMovement.WeaponSpriteRenderer;
         sr.color = stats.Color;
 
+        // Ancho/alto invertidos respecto a antes: el indicador ahora apunta fijo hacia arriba
+        // (ver PlayerMovement.BuildAimIndicator), ya no rota hacia el mouse.
         switch (currentWeapon)
         {
             case WeaponKind.Pistol:
-                sr.transform.localScale = new Vector3(0.9f, 0.16f, 1f);
+                sr.transform.localScale = new Vector3(0.16f, 0.9f, 1f);
                 break;
             case WeaponKind.Shotgun:
-                sr.transform.localScale = new Vector3(1.05f, 0.3f, 1f);
+                sr.transform.localScale = new Vector3(0.3f, 1.05f, 1f);
                 break;
             case WeaponKind.Flamethrower:
-                sr.transform.localScale = new Vector3(0.7f, 0.34f, 1f);
+                sr.transform.localScale = new Vector3(0.34f, 0.7f, 1f);
                 break;
             case WeaponKind.RocketLauncher:
-                sr.transform.localScale = new Vector3(1f, 0.42f, 1f);
+                sr.transform.localScale = new Vector3(0.42f, 1f, 1f);
+                break;
+            case WeaponKind.Sniper:
+                sr.transform.localScale = new Vector3(0.12f, 1.3f, 1f);
                 break;
         }
-    }
-
-    private Vector2 GetDirectionToMouse(Vector3 fromPosition)
-    {
-        Vector3 mouseWorldPos = cam.ScreenToWorldPoint(Input.mousePosition);
-        mouseWorldPos.z = 0f;
-        return (mouseWorldPos - fromPosition).normalized;
     }
 }

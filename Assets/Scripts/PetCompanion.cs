@@ -1,18 +1,21 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-// Compañero único que sigue al jugador y dispara solo al enemigo más cercano dentro de su rango.
-// Solo puede haber uno a la vez: si ya tenés uno y recogés otro PetPickup, se le reinicia la
-// duración en vez de sumar un segundo compañero (ver PetPickup.cs).
+// Dron que orbita al jugador y dispara solo al enemigo más cercano dentro de su rango.
+// Se pueden tener hasta MaxDrones a la vez; si ya estás en el máximo y recogés otro
+// PetPickup, se les reinicia la duración a todos en vez de sumar uno nuevo.
 public class PetCompanion : MonoBehaviour
 {
-    public static PetCompanion Active { get; private set; }
+    public const int MaxDrones = 3;
+    private static readonly List<PetCompanion> Active = new List<PetCompanion>();
+    public static int ActiveCount => Active.Count;
 
     private const float Duration = 60f;
     private const float FadeWarningTime = 5f;
-    private static readonly Color PetColor = new Color(0.85f, 0.4f, 1f);
+    private static readonly Color DroneColor = new Color(0.85f, 0.4f, 1f);
 
     [SerializeField] private float followSpeed = 6f;
-    [SerializeField] private float followDistance = 1.1f;
+    [SerializeField] private float orbitRadius = 1.3f;
     [SerializeField] private float attackRange = 4.5f;
     [SerializeField] private float attackCooldown = 1f;
     [SerializeField] private int damage = 6;
@@ -22,22 +25,24 @@ public class PetCompanion : MonoBehaviour
     private SpriteRenderer sr;
     private float attackTimer;
     private float remainingDuration;
+    private float orbitAngleOffset;
 
     private void Awake()
     {
-        Active = this;
+        Active.Add(this);
+        orbitAngleOffset = (Active.IndexOf(this) * 137.5f) % 360f; // ángulo dorado: se reparten solas sin amontonarse
         remainingDuration = Duration;
 
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null) player = playerObj.transform;
 
-        transform.position = player != null ? player.position + FollowOffset() : Vector3.zero;
+        transform.position = player != null ? player.position : Vector3.zero;
         transform.localScale = Vector3.one * 0.5f;
 
         sr = gameObject.AddComponent<SpriteRenderer>();
         sr.sprite = ProceduralSprites.Circle;
         sr.sharedMaterial = ProceduralSprites.WorldSpriteMaterial;
-        sr.color = PetColor;
+        sr.color = DroneColor;
         sr.sortingOrder = 4;
 
         GameObject glow = new GameObject("Glow");
@@ -46,27 +51,30 @@ public class PetCompanion : MonoBehaviour
         SpriteRenderer glowSr = glow.AddComponent<SpriteRenderer>();
         glowSr.sprite = ProceduralSprites.SoftGlow;
         glowSr.sharedMaterial = ProceduralSprites.WorldSpriteMaterial;
-        glowSr.color = new Color(PetColor.r, PetColor.g, PetColor.b, 0.35f);
+        glowSr.color = new Color(DroneColor.r, DroneColor.g, DroneColor.b, 0.35f);
         glowSr.sortingOrder = -1;
     }
 
     private void OnDestroy()
     {
-        if (Active == this) Active = null;
+        Active.Remove(this);
     }
 
-    public void RefreshDuration()
+    public static void RefreshAll()
     {
-        remainingDuration = Duration;
+        foreach (PetCompanion drone in Active)
+        {
+            drone.remainingDuration = Duration;
+        }
     }
-
-    private Vector3 FollowOffset() => new Vector3(-followDistance, followDistance, 0f);
 
     private void Update()
     {
         if (player == null) return;
 
-        transform.position = Vector3.Lerp(transform.position, player.position + FollowOffset(), followSpeed * Time.deltaTime);
+        float angle = (Time.time * 40f + orbitAngleOffset) * Mathf.Deg2Rad;
+        Vector3 offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * orbitRadius;
+        transform.position = Vector3.Lerp(transform.position, player.position + offset, followSpeed * Time.deltaTime);
 
         remainingDuration -= Time.deltaTime;
         if (remainingDuration <= 0f)
@@ -78,7 +86,7 @@ public class PetCompanion : MonoBehaviour
         if (remainingDuration <= FadeWarningTime)
         {
             float pulse = (Mathf.Sin(Time.time * 8f) + 1f) * 0.5f;
-            sr.color = Color.Lerp(PetColor, Color.white, pulse * 0.6f);
+            sr.color = Color.Lerp(DroneColor, Color.white, pulse * 0.6f);
         }
 
         attackTimer -= Time.deltaTime;

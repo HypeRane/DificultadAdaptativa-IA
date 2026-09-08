@@ -18,6 +18,7 @@ public class Enemy : MonoBehaviour
     private Transform player;
     private Rigidbody2D rb;
     private SpriteRenderer sr;
+    private Camera mainCam;
     private Color baseColor;
     private Coroutine flashRoutine;
 
@@ -28,11 +29,17 @@ public class Enemy : MonoBehaviour
     private float rangedProjectileSpeed;
     private float rangedAttackTimer;
 
+    private bool isBomber;
+    private float bomberExplosionRadius;
+    private int bomberExplosionDamage;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
+
+        mainCam = Camera.main;
 
         sr = GetComponent<SpriteRenderer>();
         if (sr != null) baseColor = sr.color;
@@ -86,6 +93,10 @@ public class Enemy : MonoBehaviour
         rangedDamage = arch.RangedDamage;
         rangedProjectileSpeed = arch.RangedProjectileSpeed;
         rangedAttackTimer = Random.Range(0f, rangedFireInterval); // para que no disparen todos sincronizados
+
+        isBomber = arch.IsBomber;
+        bomberExplosionRadius = arch.BomberExplosionRadius;
+        bomberExplosionDamage = arch.BomberExplosionDamage;
     }
 
     // Configura al jefe con stats propias (mucho más grandes que un enemigo común) sobre el
@@ -148,6 +159,8 @@ public class Enemy : MonoBehaviour
 
     private void Update()
     {
+        CheckOffscreenCleanup();
+
         if (!isRanged || player == null) return;
 
         rangedAttackTimer -= Time.deltaTime;
@@ -158,12 +171,66 @@ public class Enemy : MonoBehaviour
         }
     }
 
+    // La cámara del shmup vertical hace scroll continuo hacia arriba: si el jugador dejó a este
+    // enemigo (o al jefe, que también usa este componente) muy atrás, ya no tiene sentido seguir
+    // persiguiendo. Se limpia directo con Destroy (no Die()) para no dar puntaje ni disparar el
+    // evento OnDied — no fue derrotado, solo quedó fuera de pantalla.
+    private void CheckOffscreenCleanup()
+    {
+        if (mainCam == null) return;
+
+        float cleanupY = mainCam.transform.position.y - mainCam.orthographicSize * 2.5f;
+        if (transform.position.y < cleanupY)
+        {
+            Destroy(gameObject);
+        }
+    }
+
     private void FireAtPlayer()
     {
         Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized;
+
+        // En Clímax el director sube ligeramente la velocidad de los proyectiles (sin tocar
+        // EnemyProjectile ni sus colliders: solo pasa un valor distinto al Init existente).
+        float speed = rangedProjectileSpeed;
+        if (DifficultyManager.Instance != null && DifficultyManager.Instance.CurrentState == DirectorState.Climax)
+        {
+            speed *= 1.15f;
+        }
+
+        bool campingDetected = PlayerTelemetryTracker.Instance != null && PlayerTelemetryTracker.Instance.IsPlayerCamping;
+        if (campingDetected)
+        {
+            FireFan(dir, speed);
+        }
+        else
+        {
+            SpawnBullet(dir, speed);
+        }
+    }
+
+    // Si el jugador se queda quieto en un punto "seguro", el Escupidor abre el abanico de tiro
+    // para que ese punto deje de ser seguro, en vez de seguir mandando un solo disparo directo.
+    private void FireFan(Vector2 baseDir, float speed)
+    {
+        const int fanShots = 3;
+        const float fanSpreadDegrees = 22f;
+        float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+
+        for (int i = 0; i < fanShots; i++)
+        {
+            float t = (float)i / (fanShots - 1) - 0.5f;
+            float angle = baseAngle + t * fanSpreadDegrees;
+            Vector2 dir = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
+            SpawnBullet(dir, speed);
+        }
+    }
+
+    private void SpawnBullet(Vector2 dir, float speed)
+    {
         GameObject bulletObj = new GameObject("EnemyBullet");
         bulletObj.transform.position = transform.position;
-        bulletObj.AddComponent<EnemyProjectile>().Init(dir, rangedProjectileSpeed, rangedDamage, baseColor);
+        bulletObj.AddComponent<EnemyProjectile>().Init(dir, speed, rangedDamage, baseColor);
     }
 
     public void TakeDamage(int amount)
@@ -196,22 +263,52 @@ public class Enemy : MonoBehaviour
     {
         DifficultyManager.Instance?.RegisterEnemyKilled();
         GameManager.Instance?.RegisterKill(transform.position);
-        HitEffects.SpawnBurst(transform.position, baseColor, 10, 5f, 0.45f);
-        CameraFollow.Shake(0.12f, 0.08f);
         SoundManager.Play(Sfx.EnemyDeath);
         OnDied?.Invoke();
+
+        if (isBomber)
+        {
+            DealExplosionDamage();
+            HitEffects.SpawnBurst(transform.position, baseColor, 14, 5f, 0.4f);
+            SoundManager.Play(Sfx.Explosion);
+            CameraFollow.Shake(0.2f, 0.16f);
+        }
+        else
+        {
+            HitEffects.SpawnBurst(transform.position, baseColor, 10, 5f, 0.45f);
+            CameraFollow.Shake(0.12f, 0.08f);
+        }
+
         Destroy(gameObject);
+    }
+
+    // El Explosivo no reparte daño de contacto normal: detona en área al llegar al jugador
+    // (o al morir por cualquier otra causa), dañando solo si el jugador quedó dentro del radio.
+    private void DealExplosionDamage()
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, bomberExplosionRadius);
+        foreach (Collider2D col in hits)
+        {
+            if (!col.CompareTag("Player")) continue;
+            PlayerHealth playerHealth = col.GetComponent<PlayerHealth>();
+            if (playerHealth != null) playerHealth.TakeDamage(bomberExplosionDamage);
+        }
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Player"))
+        if (!collision.gameObject.CompareTag("Player")) return;
+
+        if (isBomber)
         {
-            PlayerHealth playerHealth = collision.gameObject.GetComponent<PlayerHealth>();
-            if (playerHealth != null)
-            {
-                playerHealth.TakeDamage(contactDamage);
-            }
+            Die();
+            return;
+        }
+
+        PlayerHealth normalHit = collision.gameObject.GetComponent<PlayerHealth>();
+        if (normalHit != null)
+        {
+            normalHit.TakeDamage(contactDamage);
         }
     }
 }
