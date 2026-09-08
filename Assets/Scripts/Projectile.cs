@@ -69,6 +69,14 @@ public class Projectile : MonoBehaviour
                 }
             }
             Destroy(gameObject);
+            return;
+        }
+
+        if (other.GetComponent<ObstacleMarker>() != null)
+        {
+            if (isExplosive) Explode();
+            HitEffects.SpawnBurst(transform.position, new Color(0.5f, 0.45f, 0.4f), 5, 2.5f, 0.2f);
+            Destroy(gameObject);
         }
     }
 
@@ -76,6 +84,7 @@ public class Projectile : MonoBehaviour
     {
         CameraFollow.Shake(0.2f, 0.18f);
         HitEffects.SpawnBurst(transform.position, new Color(1f, 0.6f, 0.1f), 16, 6f, 0.5f);
+        SoundManager.Play(Sfx.Explosion);
 
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, explosionRadius);
         bool hitAny = false;

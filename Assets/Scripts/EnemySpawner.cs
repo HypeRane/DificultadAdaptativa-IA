@@ -26,6 +26,7 @@ public class EnemySpawner : MonoBehaviour
     private void SpawnEnemy()
     {
         if (enemyPrefab == null) return;
+        if (GameObject.FindGameObjectsWithTag("Enemy").Length >= GetConcurrentCap()) return;
 
         Vector2 spawnPos = GetRandomPointOnCircle(spawnRadius);
         GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
@@ -50,6 +51,14 @@ public class EnemySpawner : MonoBehaviour
         if (level >= 4) pool.Add(EnemyKind.Tank);
 
         return pool[Random.Range(0, pool.Count)];
+    }
+
+    // Techo de enemigos vivos a la vez: sin esto, si el intervalo de aparición baja mucho y el
+    // jugador no llega a limpiarlos, se acumulan sin control. Crece un poco con el nivel.
+    private int GetConcurrentCap()
+    {
+        int level = DifficultyManager.Instance != null ? DifficultyManager.Instance.DifficultyLevel : 1;
+        return 6 + level;
     }
 
     private Vector2 GetRandomPointOnCircle(float radius)

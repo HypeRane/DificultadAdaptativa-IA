@@ -49,7 +49,7 @@ public class PlayerMovement : MonoBehaviour
     private void FixedUpdate()
     {
         // El movimiento físico va en FixedUpdate, no en Update, para que sea consistente sin importar el framerate
-        rb.MovePosition(rb.position + moveInput * moveSpeed * Time.fixedDeltaTime);
+        rb.MovePosition(rb.position + moveInput * moveSpeed * PerkEffects.MoveSpeedMultiplier * Time.fixedDeltaTime);
     }
 
     private void ReadMovementInput()

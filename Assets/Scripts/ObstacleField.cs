@@ -46,6 +46,8 @@ public class ObstacleField : MonoBehaviour
         obj.transform.localScale = Vector3.one * size;
         obj.transform.rotation = Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
 
+        obj.AddComponent<ObstacleMarker>();
+
         SpriteRenderer sr = obj.AddComponent<SpriteRenderer>();
         sr.sprite = round ? ProceduralSprites.Circle : ProceduralSprites.RoundedRect();
         sr.sharedMaterial = ProceduralSprites.WorldSpriteMaterial;

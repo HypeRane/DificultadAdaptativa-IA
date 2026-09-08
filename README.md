@@ -18,7 +18,7 @@ Es también el punto de partida de un proyecto más grande: la versión actual u
 - **Disparar:** click izquierdo (mantener presionado)
 - **Cambiar de arma:** teclas 1-4 (solo si tenés munición de esa arma)
 - **Reiniciar tras morir:** R
-- **Objetivo:** sobrevive todo lo que puedas, sumá puntaje con combos de kills seguidas. Los enemigos aparecen sin parar y la dificultad se reajusta cada 15 segundos según cómo te esté yendo — un panel en pantalla muestra en vivo qué está ajustando la IA.
+- **Objetivo:** sobrevive todo lo que puedas, sumá puntaje con combos de kills seguidas, elegí mejoras al subir de nivel y sobrevive a los jefes. Los enemigos aparecen sin parar y la dificultad se reajusta cada 15 segundos según cómo te esté yendo — un panel en pantalla muestra en vivo qué está ajustando la IA.
 
 ## 🧠 Cómo funciona el sistema de dificultad
 
@@ -42,9 +42,14 @@ Cada evaluación se guarda en un CSV local (`difficulty_sessions.csv`, en la car
 
 ## ✨ Qué hay en el juego
 
+- **Menú principal:** título, controles y los mejores resultados guardados localmente (puntaje, racha, nivel y tiempo de supervivencia), con botón de Jugar.
 - **HUD en vivo:** vida, puntaje/combo, cronómetro, y un panel de telemetría que muestra en tiempo real lo que la IA de dificultad está haciendo (nivel, velocidad/vida de enemigos, intervalo de spawn, precisión, enemigos activos), con avisos cuando la dificultad sube o baja.
 - **4 armas:** Pistola (infinita), Escopeta (más daño de cerca por perdigón, cae con la distancia), Lanzallamas (daño continuo en cono) y Lanzacohetes (explota en área). Las especiales se consiguen recogiéndolas del mapa.
 - **Mascota aliada:** un compañero que orbita al jugador y dispara solo a los enemigos cercanos. Se recoge del suelo (aparece al azar o como premio por una buena racha de combo) y recogerla de nuevo renueva su duración.
+- **Jefes:** aparecen cada cierto tiempo (con aviso previo), con vida/daño escalados según la dificultad actual, un patrón de disparo radial, barra de vida propia en el HUD y una bonificación de puntaje al derrotarlos.
+- **Perks roguelite:** cada vez que la IA sube a un nivel de dificultad par, o al derrotar un jefe, el juego se pausa y ofrece elegir 1 de 3 mejoras (más daño, cadencia, vida, velocidad, vampirismo, mascota más fuerte, armadura, y más) que se acumulan durante la partida.
+- **Audio:** todos los efectos de sonido (disparos por arma, impactos, explosiones, pickups, cambios de dificultad, alarma de jefe, etc.) se generan por código con osciladores simples, sin archivos de audio externos.
+- **Ambientación reactiva:** la iluminación global de la escena se va tiñendo de un celeste calmado a un rojo intenso a medida que sube el nivel de dificultad.
 - **Obstáculos y mapa:** rocas/cajas repartidas por todo el mapa que bloquean el paso, para darle forma táctica a la arena.
 - **Juice visual:** screen shake, flashes de impacto, partículas de golpe/muerte, texto de daño flotante, animación de aparición de enemigos — todo generado por código en tiempo de ejecución, sin depender de assets de arte.
 
@@ -52,13 +57,16 @@ Cada evaluación se guarda en un CSV local (`difficulty_sessions.csv`, en la car
 
 | Categoría | Scripts | Responsabilidad |
 |---|---|---|
-| Core | `GameBootstrapper`, `GameManager`, `DifficultyManager` | Arman la partida al vuelo (HUD, fondo, spawners), llevan puntaje/combo/game-over, y centralizan las métricas + reglas de dificultad (con logging a CSV) |
+| Core | `GameBootstrapper`, `GameManager`, `DifficultyManager`, `HighScoreManager` | Arman la partida al vuelo (HUD, fondo, spawners, EventSystem), llevan puntaje/combo/game-over, centralizan las métricas + reglas de dificultad (con logging a CSV), y guardan los mejores resultados en PlayerPrefs |
 | Jugador | `PlayerMovement`, `PlayerShooting`, `PlayerHealth`, `CameraFollow` | Movimiento y apuntado, disparo por arma, vida, cámara con seguimiento y screen shake |
 | Armas | `WeaponData`, `Projectile`, `WeaponPickup`, `WeaponPickupSpawner` | Stats de cada arma (daño, caída por distancia, si explota), proyectiles, y sus recogibles en el mapa |
 | Enemigos | `EnemyData`, `Enemy`, `EnemySpawner`, `EnemyProjectile` | Arquetipos (rastreador/corredor/tirador/bruto), spawn y desbloqueo según dificultad, IA de persecución/distancia y disparo a distancia |
+| Jefes | `BossDirector`, `BossController` | Decide cuándo aparece un jefe y arma el encuentro (aviso, stats escaladas); patrón de disparo radial y aviso de derrota |
+| Perks | `PerkEffects`, `PerkDatabase`, `PerkManager` | Multiplicadores globales de la run, catálogo de mejoras elegibles, y cuándo ofrecerlas (nivel par o jefe derrotado) |
 | Mascota | `PetCompanion`, `PetProjectile`, `PetPickup`, `PetPickupSpawner` | Compañero que sigue y dispara solo, y sus recogibles (aleatorios o por combo) |
-| Mapa | `ArenaBackground`, `ObstacleField`, `MapUtility` | Fondo procedural y obstáculos repartidos por toda el área visible |
-| UI y efectos | `HUDController`, `UIKit`, `ProceduralSprites`, `HitEffects`, `DebrisFX`, `FloatingUIText`, `BlinkText` | HUD completo construido por código, generación de sprites/paneles en runtime, partículas y texto flotante |
+| Mapa | `ArenaBackground`, `ObstacleField`, `MapUtility`, `DifficultyAmbiance` | Fondo procedural, obstáculos repartidos por toda el área visible, y el tinte de luz según dificultad |
+| Audio | `AudioKit`, `SoundManager` | Generación de SFX por osciladores/ruido y el pool de reproducción |
+| UI y efectos | `HUDController`, `UIKit`, `ProceduralSprites`, `HitEffects`, `DebrisFX`, `FloatingUIText`, `BlinkText` | HUD completo (incluye menú principal, elección de perks y barra de jefe) construido por código, generación de sprites/paneles/botones en runtime, partículas y texto flotante |
 
 ## 🛠️ Tech stack
 
@@ -74,11 +82,11 @@ Cada evaluación se guarda en un CSV local (`difficulty_sessions.csv`, en la car
 - [x] Logging de datos de sesión a CSV
 - [x] HUD en pantalla mostrando la dificultad ajustándose en vivo
 - [x] Sistema de armas, mascota aliada y variedad de enemigos
-- [ ] Jefes cada cierto nivel de dificultad / tiempo, con HUD de encuentro especial
-- [ ] Sistema de perks tipo roguelite (elegir mejora al subir de nivel o matar un jefe)
-- [ ] Audio: SFX generados por código para disparos, impactos, pickups y cambios de dificultad
-- [ ] Menú principal + high score guardado localmente
-- [ ] Tinte/iluminación de escena que reacciona al nivel de dificultad (usando la Global Light 2D)
+- [x] Jefes cada cierto tiempo, con aviso previo, barra de vida y bonificación de puntaje
+- [x] Sistema de perks tipo roguelite (elegir mejora al subir de nivel o matar un jefe)
+- [x] Audio: SFX generados por código para disparos, impactos, pickups y cambios de dificultad
+- [x] Menú principal + high score guardado localmente
+- [x] Tinte/iluminación de escena que reacciona al nivel de dificultad (usando la Global Light 2D)
 - [ ] Análisis exploratorio de los datos con Python
 - [ ] Modelo de ML que prediga el nivel de habilidad del jugador
 - [ ] Build jugable en itch.io

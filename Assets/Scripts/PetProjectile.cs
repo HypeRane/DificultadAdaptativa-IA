@@ -24,6 +24,10 @@ public class PetProjectile : MonoBehaviour
         sr.color = ShotColor;
         sr.sortingOrder = 5;
 
+        Rigidbody2D rb = gameObject.AddComponent<Rigidbody2D>();
+        rb.gravityScale = 0f;
+        rb.bodyType = RigidbodyType2D.Kinematic; // necesario para que detecte triggers contra obstáculos estáticos
+
         CircleCollider2D col = gameObject.AddComponent<CircleCollider2D>();
         col.isTrigger = true;
         col.radius = 0.45f;
@@ -38,14 +42,22 @@ public class PetProjectile : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!other.CompareTag("Enemy")) return;
-
-        Enemy enemy = other.GetComponent<Enemy>();
-        if (enemy != null)
+        if (other.CompareTag("Enemy"))
         {
-            enemy.TakeDamage(damage);
-            HitEffects.SpawnBurst(transform.position, ShotColor, 3, 2f, 0.2f);
+            Enemy enemy = other.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage(damage);
+                HitEffects.SpawnBurst(transform.position, ShotColor, 3, 2f, 0.2f);
+            }
+            Destroy(gameObject);
+            return;
         }
-        Destroy(gameObject);
+
+        if (other.GetComponent<ObstacleMarker>() != null)
+        {
+            HitEffects.SpawnBurst(transform.position, new Color(0.5f, 0.45f, 0.4f), 4, 2f, 0.15f);
+            Destroy(gameObject);
+        }
     }
 }

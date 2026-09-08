@@ -22,6 +22,10 @@ public class EnemyProjectile : MonoBehaviour
         sr.color = color;
         sr.sortingOrder = 5;
 
+        Rigidbody2D rb = gameObject.AddComponent<Rigidbody2D>();
+        rb.gravityScale = 0f;
+        rb.bodyType = RigidbodyType2D.Kinematic; // necesario para que detecte triggers contra obstáculos estáticos
+
         CircleCollider2D col = gameObject.AddComponent<CircleCollider2D>();
         col.isTrigger = true;
         col.radius = 0.5f;
@@ -36,12 +40,20 @@ public class EnemyProjectile : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!other.CompareTag("Player")) return;
+        if (other.CompareTag("Player"))
+        {
+            PlayerHealth playerHealth = other.GetComponent<PlayerHealth>();
+            if (playerHealth != null) playerHealth.TakeDamage(damage);
 
-        PlayerHealth playerHealth = other.GetComponent<PlayerHealth>();
-        if (playerHealth != null) playerHealth.TakeDamage(damage);
+            HitEffects.SpawnBurst(transform.position, Color.white, 4, 3f, 0.2f);
+            Destroy(gameObject);
+            return;
+        }
 
-        HitEffects.SpawnBurst(transform.position, Color.white, 4, 3f, 0.2f);
-        Destroy(gameObject);
+        if (other.GetComponent<ObstacleMarker>() != null)
+        {
+            HitEffects.SpawnBurst(transform.position, new Color(0.5f, 0.45f, 0.4f), 4, 2f, 0.15f);
+            Destroy(gameObject);
+        }
     }
 }

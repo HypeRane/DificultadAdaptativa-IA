@@ -108,9 +108,11 @@ public class PetCompanion : MonoBehaviour
         if (closest == null) return;
 
         Vector2 dir = ((Vector2)closest.position - (Vector2)transform.position).normalized;
+        int finalDamage = Mathf.RoundToInt(damage * PerkEffects.PetDamageMultiplier);
+
         GameObject shotObj = new GameObject("PetShot");
         shotObj.transform.position = transform.position;
-        shotObj.AddComponent<PetProjectile>().Init(dir, projectileSpeed, damage);
+        shotObj.AddComponent<PetProjectile>().Init(dir, projectileSpeed, finalDamage);
 
         attackTimer = attackCooldown;
     }

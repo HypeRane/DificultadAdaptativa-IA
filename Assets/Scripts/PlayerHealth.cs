@@ -23,19 +23,41 @@ public class PlayerHealth : MonoBehaviour
     {
         if (isDead) return;
 
-        DifficultyManager.Instance?.RegisterPlayerDamaged(amount);
-        CurrentHealth = Mathf.Max(0, CurrentHealth - amount);
+        int reduced = Mathf.Max(1, Mathf.RoundToInt(amount * PerkEffects.DamageTakenMultiplier));
 
-        OnDamaged?.Invoke(amount);
+        DifficultyManager.Instance?.RegisterPlayerDamaged(reduced);
+        CurrentHealth = Mathf.Max(0, CurrentHealth - reduced);
+
+        OnDamaged?.Invoke(reduced);
         OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
         CameraFollow.Shake(0.15f, 0.12f);
+        SoundManager.Play(Sfx.PlayerHurt);
 
-        Debug.Log($"Jugador recibió {amount} de daño. Vida actual: {CurrentHealth}");
+        Debug.Log($"Jugador recibió {reduced} de daño. Vida actual: {CurrentHealth}");
 
         if (CurrentHealth <= 0)
         {
             Die();
         }
+    }
+
+    // Usado por perks (Botiquín) y por el vampirismo (curación por kill).
+    public void Heal(int amount)
+    {
+        if (isDead || amount <= 0) return;
+
+        CurrentHealth = Mathf.Min(maxHealth, CurrentHealth + amount);
+        OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
+    }
+
+    // Usado por el perk Vitalidad: sube el tope de vida y cura esa misma cantidad al instante.
+    public void IncreaseMaxHealth(int amount)
+    {
+        if (amount <= 0) return;
+
+        maxHealth += amount;
+        CurrentHealth = Mathf.Min(maxHealth, CurrentHealth + amount);
+        OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
     }
 
     private void Die()

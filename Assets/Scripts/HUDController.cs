@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,6 +14,7 @@ public class HUDController : MonoBehaviour
     private const float StatsPollInterval = 0.25f;
 
     private RectTransform floatingLayer;
+    private Image vignetteImage;
 
     // Vida
     private Image healthChipBar;
@@ -55,6 +58,21 @@ public class HUDController : MonoBehaviour
 
     // Arma
     private Text weaponText;
+
+    // Jefe
+    private GameObject bossBarPanel;
+    private Image bossBarFill;
+    private Text bossBarLabel;
+    private Text bossBarHpText;
+    private Enemy trackedBoss;
+
+    // Elección de perk
+    private GameObject perkPanel;
+    private Action<PerkDefinition> perkCallback;
+
+    // Menú principal
+    private GameObject mainMenuPanel;
+    private Text mainMenuScoresText;
 
     private PlayerHealth playerHealth;
     private PlayerShooting playerShooting;
@@ -102,8 +120,7 @@ public class HUDController : MonoBehaviour
             DifficultyManager.Instance.OnDifficultyChanged += HandleDifficultyChanged;
         }
 
-        Cursor.visible = false;
-        StartCoroutine(FadeOutTip());
+        ShowMainMenu();
     }
 
     private void OnDestroy()
@@ -130,6 +147,7 @@ public class HUDController : MonoBehaviour
 
     private void Update()
     {
+        UpdateBossBar();
         UpdateCrosshair();
         AnimateHealthBars();
         UpdateTimeText();
@@ -150,6 +168,7 @@ public class HUDController : MonoBehaviour
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
+        canvasObj.AddComponent<GraphicRaycaster>();
 
         CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -169,6 +188,9 @@ public class HUDController : MonoBehaviour
         BuildDamageOverlay(canvasRect);
         BuildFloatingLayer(canvasRect);
         BuildGameOverPanel(canvasRect);
+        BuildBossBar(canvasRect);
+        BuildPerkPanel(canvasRect);
+        BuildMainMenuPanel(canvasRect);
     }
 
     private static void Anchor(RectTransform rt, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPos, Vector2 sizeDelta)
@@ -184,10 +206,10 @@ public class HUDController : MonoBehaviour
     {
         RectTransform rt = UIKit.CreateUIObject("Vignette", parent);
         Anchor(rt, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        Image img = rt.gameObject.AddComponent<Image>();
-        img.sprite = ProceduralSprites.Vignette;
-        img.color = new Color(0f, 0f, 0.02f, 0.55f);
-        img.raycastTarget = false;
+        vignetteImage = rt.gameObject.AddComponent<Image>();
+        vignetteImage.sprite = ProceduralSprites.Vignette;
+        vignetteImage.color = new Color(0f, 0f, 0.02f, 0.55f);
+        vignetteImage.raycastTarget = false;
     }
 
     private void BuildHealthPanel(Transform parent)
@@ -372,6 +394,85 @@ public class HUDController : MonoBehaviour
         gameOverPanel.SetActive(false);
     }
 
+    private void BuildBossBar(Transform parent)
+    {
+        RectTransform panel = UIKit.CreateUIObject("BossBar", parent);
+        Anchor(panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -150), new Vector2(700, 50));
+        Image bg = panel.gameObject.AddComponent<Image>();
+        bg.sprite = ProceduralSprites.RoundedRect();
+        bg.type = Image.Type.Sliced;
+        bg.color = new Color(0f, 0f, 0f, 0.55f);
+
+        RectTransform barBg = UIKit.CreateUIObject("FillBg", panel);
+        Anchor(barBg, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(6, 6), new Vector2(688, 22));
+        Image barBgImg = barBg.gameObject.AddComponent<Image>();
+        barBgImg.sprite = ProceduralSprites.Square;
+        barBgImg.color = new Color(0f, 0f, 0f, 0.6f);
+
+        RectTransform fillRt = UIKit.CreateUIObject("Fill", panel);
+        Anchor(fillRt, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(6, 6), new Vector2(688, 22));
+        bossBarFill = fillRt.gameObject.AddComponent<Image>();
+        bossBarFill.sprite = ProceduralSprites.Square;
+        bossBarFill.color = new Color(0.8f, 0.1f, 0.15f);
+        bossBarFill.type = Image.Type.Filled;
+        bossBarFill.fillMethod = Image.FillMethod.Horizontal;
+        bossBarFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+        bossBarFill.fillAmount = 1f;
+
+        bossBarLabel = UIKit.CreateText("Label", panel, "JEFE", 18, Color.white, TextAnchor.UpperCenter);
+        Anchor(bossBarLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0, 8), new Vector2(0, 20));
+
+        bossBarHpText = UIKit.CreateText("HpText", panel, "", 14, new Color(1f, 1f, 1f, 0.85f), TextAnchor.MiddleCenter);
+        bossBarHpText.fontStyle = FontStyle.Normal;
+        Anchor(bossBarHpText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 6), new Vector2(0, 22));
+
+        bossBarPanel = panel.gameObject;
+        bossBarPanel.SetActive(false);
+    }
+
+    private void BuildPerkPanel(Transform parent)
+    {
+        RectTransform root = UIKit.CreateUIObject("PerkPanel", parent);
+        Anchor(root, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        Image bg = root.gameObject.AddComponent<Image>();
+        bg.color = new Color(0f, 0f, 0f, 0.85f);
+        perkPanel = root.gameObject;
+
+        Text title = UIKit.CreateText("Title", root, "¡SUBISTE DE NIVEL! Elegí una mejora", 30, new Color(0.55f, 0.85f, 1f), TextAnchor.MiddleCenter);
+        Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 180), new Vector2(1100, 60));
+
+        perkPanel.SetActive(false);
+    }
+
+    private void BuildMainMenuPanel(Transform parent)
+    {
+        RectTransform root = UIKit.CreateUIObject("MainMenu", parent);
+        Anchor(root, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        Image bg = root.gameObject.AddComponent<Image>();
+        bg.color = new Color(0.02f, 0.03f, 0.07f, 0.94f);
+        mainMenuPanel = root.gameObject;
+
+        Text title = UIKit.CreateText("Title", root, "DIFICULTAD ADAPTATIVA", 52, new Color(0.55f, 0.85f, 1f), TextAnchor.MiddleCenter);
+        Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(1100, 80));
+
+        Text subtitle = UIKit.CreateText("Subtitle", root, "Un shooter top-down donde una IA ajusta la dificultad en vivo según cómo juegues", 19, new Color(1f, 1f, 1f, 0.75f), TextAnchor.MiddleCenter);
+        subtitle.fontStyle = FontStyle.Normal;
+        Anchor(subtitle.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 165), new Vector2(760, 40));
+
+        mainMenuScoresText = UIKit.CreateText("Scores", root, "", 18, new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
+        mainMenuScoresText.fontStyle = FontStyle.Normal;
+        mainMenuScoresText.lineSpacing = 1.35f;
+        Anchor(mainMenuScoresText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 55), new Vector2(700, 100));
+
+        Button playButton = UIKit.CreateButton("PlayButton", root, "JUGAR", new Color(0.25f, 0.65f, 0.35f), new Vector2(260, 70), HandlePlayClicked);
+        Anchor(playButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -60), new Vector2(260, 70));
+
+        Text tip = UIKit.CreateText("Tip", root, "WASD: moverte  ·  Click: disparar  ·  1-4: cambiar de arma  ·  R: reiniciar al morir", 16, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleCenter);
+        Anchor(tip.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 50), new Vector2(900, 30));
+
+        mainMenuPanel.SetActive(false);
+    }
+
     // ---------- Lógica de actualización ----------
 
     private void UpdateCrosshair()
@@ -433,6 +534,12 @@ public class HUDController : MonoBehaviour
             $"Aparición cada: {dm.SpawnInterval:F2}s\n" +
             $"Precisión: {dm.Accuracy:P0}\n" +
             $"Enemigos activos: {activeEnemies}";
+
+        // Tinte de peligro: se va poniendo más rojo e intenso a medida que sube el nivel de dificultad.
+        float dangerT = Mathf.InverseLerp(1, 10, dm.DifficultyLevel);
+        Color calmVignette = new Color(0f, 0f, 0.02f, 0.5f);
+        Color dangerVignette = new Color(0.4f, 0.03f, 0.03f, 0.68f);
+        vignetteImage.color = Color.Lerp(calmVignette, dangerVignette, dangerT);
     }
 
     private string FormatTime(float t)
@@ -440,6 +547,20 @@ public class HUDController : MonoBehaviour
         int minutes = Mathf.FloorToInt(t / 60f);
         int seconds = Mathf.FloorToInt(t % 60f);
         return $"{minutes:00}:{seconds:00}";
+    }
+
+    private void UpdateBossBar()
+    {
+        if (trackedBoss == null)
+        {
+            if (bossBarPanel.activeSelf) bossBarPanel.SetActive(false);
+            return;
+        }
+
+        int current = Mathf.Max(0, trackedBoss.CurrentHealth);
+        int max = Mathf.Max(1, trackedBoss.MaxHealth);
+        bossBarFill.fillAmount = (float)current / max;
+        bossBarHpText.text = $"{current} / {max}";
     }
 
     // ---------- Manejadores de eventos ----------
@@ -493,17 +614,19 @@ public class HUDController : MonoBehaviour
         string msg = increased ? "▲ DIFICULTAD AUMENTADA" : "▼ DIFICULTAD REDUCIDA";
         Color c = increased ? new Color(1f, 0.4f, 0.35f) : new Color(0.4f, 0.85f, 1f);
         ShowToast(msg, c);
+        SoundManager.Play(increased ? Sfx.DifficultyUp : Sfx.DifficultyDown);
     }
 
-    private void HandleGameOver()
+    private void HandleGameOver(bool isNewRecord)
     {
         DifficultyManager dm = DifficultyManager.Instance;
         int level = dm != null ? dm.DifficultyLevel : 1;
+        string recordLine = isNewRecord ? "\n¡NUEVO RÉCORD!" : "";
 
         gameOverStatsText.text =
             $"Puntaje final: {GameManager.Instance.Score:N0}\n" +
             $"Sobreviviste: {FormatTime(GameManager.Instance.SurvivalTime)}\n" +
-            $"Nivel de dificultad alcanzado: {level}/10";
+            $"Nivel de dificultad alcanzado: {level}/10{recordLine}";
 
         gameOverPanel.SetActive(true);
         Cursor.visible = true;
@@ -588,5 +711,89 @@ public class HUDController : MonoBehaviour
         rt.anchoredPosition = localPoint;
         rt.sizeDelta = new Vector2(220, 60);
         txt.gameObject.AddComponent<FloatingUIText>().Init(rt, txt);
+    }
+
+    public void ShowBossBar(Enemy enemy, string displayName)
+    {
+        trackedBoss = enemy;
+        bossBarLabel.text = displayName;
+        bossBarPanel.SetActive(true);
+    }
+
+    public void ShowBossWarning()
+    {
+        ShowToast("⚠ UN JEFE SE ACERCA...", new Color(1f, 0.3f, 0.2f));
+    }
+
+    public void ShowPerkChoice(List<PerkDefinition> choices, Action<PerkDefinition> onChosen)
+    {
+        perkCallback = onChosen;
+        Time.timeScale = 0f;
+        Cursor.visible = true;
+
+        List<Transform> oldCards = new List<Transform>();
+        foreach (Transform child in perkPanel.transform)
+        {
+            if (child.name.StartsWith("Choice")) oldCards.Add(child);
+        }
+        foreach (Transform card in oldCards) Destroy(card.gameObject);
+
+        const float spacing = 340f;
+        float startX = -(choices.Count - 1) * spacing / 2f;
+
+        for (int i = 0; i < choices.Count; i++)
+        {
+            PerkDefinition perk = choices[i];
+
+            RectTransform card = UIKit.CreateUIObject($"Choice{i}", perkPanel.transform);
+            Anchor(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(startX + i * spacing, 0), new Vector2(300, 220));
+            Image cardBg = card.gameObject.AddComponent<Image>();
+            cardBg.sprite = ProceduralSprites.RoundedRect();
+            cardBg.type = Image.Type.Sliced;
+            cardBg.color = new Color(perk.Color.r * 0.25f, perk.Color.g * 0.25f, perk.Color.b * 0.25f, 0.95f);
+
+            Text name = UIKit.CreateText("Name", card, perk.Name, 23, perk.Color, TextAnchor.MiddleCenter);
+            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -22), new Vector2(0, 60));
+
+            Text desc = UIKit.CreateText("Desc", card, perk.Description, 17, Color.white, TextAnchor.MiddleCenter);
+            desc.fontStyle = FontStyle.Normal;
+            Anchor(desc.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0, -20), new Vector2(-30, -110));
+
+            Button btn = card.gameObject.AddComponent<Button>();
+            btn.targetGraphic = cardBg;
+            PerkDefinition capturedPerk = perk;
+            btn.onClick.AddListener(() => HandlePerkChosen(capturedPerk));
+        }
+
+        perkPanel.SetActive(true);
+    }
+
+    private void HandlePerkChosen(PerkDefinition perk)
+    {
+        perkPanel.SetActive(false);
+        Time.timeScale = 1f;
+        Cursor.visible = false;
+        SoundManager.Play(Sfx.UIClick);
+        perkCallback?.Invoke(perk);
+    }
+
+    private void ShowMainMenu()
+    {
+        Time.timeScale = 0f;
+        Cursor.visible = true;
+
+        mainMenuScoresText.text =
+            $"Mejor puntaje: {HighScoreManager.BestScore:N0}    Mejor racha: x{HighScoreManager.BestCombo}\n" +
+            $"Nivel máximo alcanzado: {HighScoreManager.BestLevel}/10    Mejor tiempo: {FormatTime(HighScoreManager.BestSurvivalTime)}";
+
+        mainMenuPanel.SetActive(true);
+    }
+
+    private void HandlePlayClicked()
+    {
+        mainMenuPanel.SetActive(false);
+        Time.timeScale = 1f;
+        Cursor.visible = false;
+        StartCoroutine(FadeOutTip());
     }
 }

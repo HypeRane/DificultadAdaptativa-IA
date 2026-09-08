@@ -16,6 +16,7 @@ public class PlayerShooting : MonoBehaviour
     private readonly Dictionary<WeaponKind, int> ammo = new Dictionary<WeaponKind, int>();
     private float nextFireTime;
     private float flameTickTimer;
+    private AudioSource flameLoop;
 
     private void Awake()
     {
@@ -27,11 +28,20 @@ public class PlayerShooting : MonoBehaviour
             ammo[kind] = 0;
         }
 
+        flameLoop = gameObject.AddComponent<AudioSource>();
+        flameLoop.clip = AudioKit.FlameLoop();
+        flameLoop.loop = true;
+        flameLoop.playOnAwake = false;
+        flameLoop.volume = 0.2f;
+        flameLoop.spatialBlend = 0f;
+
         UpdateWeaponVisual();
     }
 
     private void Update()
     {
+        if (Time.timeScale <= 0f) return; // menú principal, elección de perk, pausa por game over, etc.
+
         HandleSwitchInput();
 
         WeaponStats stats = WeaponDatabase.All[currentWeapon];
@@ -40,17 +50,19 @@ public class PlayerShooting : MonoBehaviour
         {
             if (stats.IsContinuous)
             {
+                if (!flameLoop.isPlaying) flameLoop.Play();
                 FireContinuous(stats);
             }
             else if (Time.time >= nextFireTime)
             {
                 FireDiscrete(stats);
-                nextFireTime = Time.time + stats.FireRate;
+                nextFireTime = Time.time + stats.FireRate * PerkEffects.FireRateMultiplier;
             }
         }
         else
         {
             flameTickTimer = 0f; // así el lanzallamas dispara de inmediato al volver a mantener click
+            if (flameLoop.isPlaying) flameLoop.Stop();
         }
     }
 
@@ -65,10 +77,13 @@ public class PlayerShooting : MonoBehaviour
     private void FireDiscrete(WeaponStats stats)
     {
         DifficultyManager.Instance?.RegisterShotFired();
+        PlayShootSound(stats.Kind);
 
         Vector3 spawnPos = firePoint != null ? firePoint.position : transform.position;
         Vector2 baseDir = GetDirectionToMouse(spawnPos);
         float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+
+        int damage = Mathf.RoundToInt(stats.Damage * PerkEffects.DamageMultiplier);
 
         int pellets = Mathf.Max(1, stats.PelletCount);
         for (int i = 0; i < pellets; i++)
@@ -84,7 +99,7 @@ public class PlayerShooting : MonoBehaviour
             if (projectile != null)
             {
                 projectile.SetDirection(dir, stats.ProjectileSpeed);
-                projectile.Configure(stats.Damage, stats.Color, stats.IsExplosive, stats.ExplosionRadius,
+                projectile.Configure(damage, stats.Color, stats.IsExplosive, stats.ExplosionRadius,
                     stats.HasFalloff, stats.FalloffStartRange, stats.FalloffEndRange, stats.MinDamageMultiplier);
             }
         }
@@ -97,12 +112,13 @@ public class PlayerShooting : MonoBehaviour
     {
         flameTickTimer -= Time.deltaTime;
         if (flameTickTimer > 0f) return;
-        flameTickTimer = stats.FireRate;
+        flameTickTimer = stats.FireRate * PerkEffects.FireRateMultiplier;
 
         DifficultyManager.Instance?.RegisterShotFired();
 
         Vector3 origin = firePoint != null ? firePoint.position : transform.position;
         Vector2 baseDir = GetDirectionToMouse(origin);
+        int damage = Mathf.RoundToInt(stats.Damage * PerkEffects.DamageMultiplier);
 
         Collider2D[] hits = Physics2D.OverlapCircleAll(origin, stats.Range);
         bool hitAny = false;
@@ -116,7 +132,7 @@ public class PlayerShooting : MonoBehaviour
             Enemy enemy = col.GetComponent<Enemy>();
             if (enemy != null)
             {
-                enemy.TakeDamage(stats.Damage);
+                enemy.TakeDamage(damage);
                 hitAny = true;
             }
         }
@@ -125,6 +141,22 @@ public class PlayerShooting : MonoBehaviour
 
         HitEffects.SpawnBurst(origin + (Vector3)(baseDir * stats.Range * 0.5f), stats.Color, 3, 1.5f, 0.2f);
         ConsumeAmmo(stats);
+    }
+
+    private void PlayShootSound(WeaponKind kind)
+    {
+        switch (kind)
+        {
+            case WeaponKind.Shotgun:
+                SoundManager.Play(Sfx.ShotgunShoot);
+                break;
+            case WeaponKind.RocketLauncher:
+                SoundManager.Play(Sfx.RocketShoot);
+                break;
+            default:
+                SoundManager.Play(Sfx.Shoot, 0.7f, UnityEngine.Random.Range(0.95f, 1.05f));
+                break;
+        }
     }
 
     private void ConsumeAmmo(WeaponStats stats)
@@ -148,6 +180,7 @@ public class PlayerShooting : MonoBehaviour
 
         currentWeapon = kind;
         flameTickTimer = 0f;
+        if (kind != WeaponKind.Flamethrower && flameLoop.isPlaying) flameLoop.Stop();
         UpdateWeaponVisual();
         OnWeaponChanged?.Invoke(currentWeapon, GetAmmoDisplay(currentWeapon));
     }

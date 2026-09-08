@@ -62,6 +62,7 @@ public class WeaponPickup : MonoBehaviour
         }
 
         HitEffects.SpawnBurst(transform.position, stats.Color, 8, 3f, 0.3f);
+        SoundManager.Play(Sfx.Pickup);
         Destroy(gameObject);
     }
 }

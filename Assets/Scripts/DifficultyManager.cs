@@ -144,9 +144,12 @@ public class DifficultyManager : MonoBehaviour
 
     private void IncreaseDifficulty()
     {
-        SpawnInterval = Mathf.Max(minSpawnInterval, SpawnInterval * 0.85f);
+        // El piso efectivo de intervalo se sube un poco a propósito (por encima de minSpawnInterval)
+        // para que los enemigos no se amontonen tan rápido, aunque el Inspector tenga un valor menor.
+        float effectiveMinInterval = Mathf.Max(minSpawnInterval, 0.75f);
+        SpawnInterval = Mathf.Max(effectiveMinInterval, SpawnInterval * 0.9f);
         EnemySpeed = Mathf.Min(maxEnemySpeed, EnemySpeed * 1.1f);
-        EnemyHealth = Mathf.Min(maxEnemyHealth, Mathf.RoundToInt(EnemyHealth * 1.15f));
+        EnemyHealth = Mathf.Min(maxEnemyHealth, Mathf.RoundToInt(EnemyHealth * 1.12f));
 
         DifficultyLevel = Mathf.Min(10, DifficultyLevel + 1);
         OnDifficultyChanged?.Invoke(true);

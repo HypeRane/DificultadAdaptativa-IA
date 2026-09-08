@@ -50,7 +50,7 @@ public class WeaponPickupSpawner : MonoBehaviour
     {
         WeaponKind kind = PickWeaponKind();
         WeaponStats stats = WeaponDatabase.All[kind];
-        int amount = Mathf.Max(1, stats.MaxAmmo / 2);
+        int amount = Mathf.Max(1, Mathf.RoundToInt(stats.MaxAmmo / 2f * PerkEffects.AmmoPickupMultiplier));
 
         GameObject pickupObj = new GameObject($"Pickup_{kind}");
         pickupObj.transform.position = pos;

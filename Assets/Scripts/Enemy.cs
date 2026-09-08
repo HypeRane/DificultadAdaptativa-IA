@@ -3,6 +3,13 @@ using UnityEngine;
 
 public class Enemy : MonoBehaviour
 {
+    // Ambiguo con System.Random si se agrega "using System;" acá (el archivo ya usa
+    // Random.Range de UnityEngine sin calificar) — se deja el evento con el tipo completo.
+    public event System.Action OnDied;
+
+    public int CurrentHealth => currentHealth;
+    public int MaxHealth => maxHealth;
+
     private float moveSpeed;
     private int maxHealth;
     private int contactDamage;
@@ -81,6 +88,22 @@ public class Enemy : MonoBehaviour
         rangedAttackTimer = Random.Range(0f, rangedFireInterval); // para que no disparen todos sincronizados
     }
 
+    // Configura al jefe con stats propias (mucho más grandes que un enemigo común) sobre el
+    // mismo componente Enemy, para heredar gratis toda la lógica de vida/daño/muerte existente.
+    public void ConfigureAsBoss(int bossMaxHealth, float bossSpeed, int bossContactDamage, Color color)
+    {
+        maxHealth = bossMaxHealth;
+        currentHealth = maxHealth;
+        moveSpeed = bossSpeed;
+        contactDamage = bossContactDamage;
+
+        if (sr != null)
+        {
+            sr.color = color;
+            baseColor = color;
+        }
+    }
+
     public void BeginSpawnAnimation()
     {
         StartCoroutine(SpawnInRoutine());
@@ -146,6 +169,7 @@ public class Enemy : MonoBehaviour
     public void TakeDamage(int amount)
     {
         currentHealth -= amount;
+        SoundManager.Play(Sfx.Hit, 0.5f, Random.Range(0.9f, 1.1f));
         FlashHit();
 
         if (currentHealth <= 0)
@@ -174,6 +198,8 @@ public class Enemy : MonoBehaviour
         GameManager.Instance?.RegisterKill(transform.position);
         HitEffects.SpawnBurst(transform.position, baseColor, 10, 5f, 0.45f);
         CameraFollow.Shake(0.12f, 0.08f);
+        SoundManager.Play(Sfx.EnemyDeath);
+        OnDied?.Invoke();
         Destroy(gameObject);
     }
 
