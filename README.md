@@ -1,106 +1,177 @@
 # Sistema de Dificultad Adaptativa (Adaptive Difficulty AI)
 
-Prototipo de un shooter top-down 2D en Unity donde la dificultad se ajusta en tiempo real según el desempeño del jugador — inspirado en sistemas como el AI Director de *Left 4 Dead* o el balance dinámico de *Resident Evil* y *Mario Kart*.
+Shoot 'em up vertical en Unity (C#) cuyo objetivo central no es el gameplay en sí, sino el sistema que lo dirige: un director de dificultad que observa el desempeño del jugador en tiempo real y ajusta la presión del juego para mantenerlo en una banda de desafío objetivo, en vez de escalar la dificultad de forma lineal por tiempo transcurrido.
 
 ![Gameplay](docs/gameplay.gif)
 <!-- TODO: reemplazar por un gif corto (10-15s) mostrando el juego y el cambio de dificultad -->
 
-## 🎮 Sobre el proyecto
+## Planteamiento
 
-La mayoría de proyectos de "IA de videojuegos" en portafolios se quedan en un enemigo con árbol de comportamiento básico. Este proyecto va por otro lado: en vez de IA para *un* enemigo, es un sistema que analiza el desempeño del jugador en tiempo real (precisión, daño recibido, enemigos eliminados) y ajusta parámetros del juego para mantener el desafío en un punto justo — ni tan fácil que aburra, ni tan difícil que frustre.
+La mayoría de proyectos de portafolio sobre "IA de videojuegos" se limitan a un enemigo con árbol de comportamiento. Este proyecto va por otro lado: en vez de IA para *un* enemigo, es un sistema de dos capas que analiza al jugador (precisión, salud, ritmo de eliminaciones, movilidad) y modula tanto la progresión estructural de la partida como el ritmo momento a momento — inspirado en el AI Director de *Left 4 Dead* y en sistemas de balance dinámico como los de *Resident Evil* o *Mario Kart*.
 
-Es también el punto de partida de un proyecto más grande: la versión actual usa un sistema de reglas (baseline), y el siguiente paso es loggear partidas reales y entrenar un modelo que reemplace o complemente esas reglas.
+La implementación actual es un modelo basado en reglas (baseline) con una máquina de estados explícita. El siguiente paso planeado es loggear partidas reales y entrenar un modelo que reemplace o complemente esas reglas — el CSV que ya se genera en cada sesión está pensado con ese fin.
 
-## 🕹️ Cómo jugar
+## Controles
 
-- **Movimiento:** WASD / flechas
-- **Apuntar:** mouse
-- **Disparar:** click izquierdo (mantener presionado)
-- **Cambiar de arma:** teclas 1-4 (solo si tenés munición de esa arma)
-- **Reiniciar tras morir:** R
-- **Objetivo:** sobrevive todo lo que puedas, sumá puntaje con combos de kills seguidas, elegí mejoras al subir de nivel y sobrevive a los jefes. Los enemigos aparecen sin parar y la dificultad se reajusta cada 15 segundos según cómo te esté yendo — un panel en pantalla muestra en vivo qué está ajustando la IA.
+- Movimiento: WASD / flechas direccionales, dentro del área visible de la cámara.
+- Disparo: mantener click izquierdo (la nave dispara siempre hacia adelante, sin apuntado).
+- Cambio de arma: teclas 1-5 (solo si hay munición de esa arma).
+- Reinicio tras morir: R.
+- Objetivo: sobrevivir el mayor tiempo posible, encadenar combos de eliminaciones, elegir mejoras al subir de nivel y superar los jefes que aparecen periódicamente.
 
-## 🧠 Cómo funciona el sistema de dificultad
+## Sistema de dificultad adaptativa
 
-Cada 15 segundos, el `DifficultyManager` evalúa una "ventana" de desempeño:
+El sistema tiene dos capas independientes que se alimentan de la misma telemetría pero operan en escalas de tiempo distintas.
+
+### Capa 1: progresión estructural (`DifficultyManager`)
+
+Cada `evaluationInterval` (15 s) se evalúa una ventana de desempeño:
 
 ```
-performance_score = enemigos_eliminados - (daño_recibido / 10)
+performance_score = eliminaciones_en_la_ventana - (daño_recibido_en_la_ventana / 10)
+blended_score      = performance_score + (skill_factor - 0.5) * 6
 ```
 
-- **Score alto** → sube la dificultad: los enemigos aparecen más seguido, se mueven más rápido y tienen más vida. Sube también un "nivel de dificultad" (1-10) visible en el HUD.
-- **Score bajo** → baja la dificultad: spawns más espaciados, enemigos más lentos y débiles.
+- `blended_score >= 5` sube el nivel de dificultad (1-10): los enemigos aparecen más seguido, se mueven más rápido y tienen más vida, dentro de límites configurables (`min`/`max`) para que el juego nunca sea imposible ni trivial.
+- `blended_score <= 1` lo baja.
 
-Todos los parámetros están limitados dentro de un rango (`min`/`max`) para que el juego nunca se vuelva imposible ni trivial. El nivel de dificultad no solo escala números: también **desbloquea contenido**, para que quede claro (y sea más divertido) que el juego está reaccionando:
+El nivel de dificultad no solo escala números: también desbloquea contenido, para que el ajuste sea perceptible y no solo numérico.
 
-- **Variedad de enemigos:** empezás solo con el Rastreador (nivel 1+); con más nivel se suman el Corredor (2+, rápido y frágil), el Tirador (3+, ataca a distancia) y el Bruto (4+, lento pero tanque).
-- **Variedad de armas:** los pickups de Escopeta aparecen desde el inicio, el Lanzallamas desde nivel 3, y el Lanzacohetes recién desde nivel 5.
+| Nivel | Se desbloquea |
+|---|---|
+| 1 | Devorador (enemigo base), Pistola (infinita) |
+| 2 | Enjambre |
+| 3 | Escupidor, pickups de Lanzallamas |
+| 4 | Behemoth, pickups de Rifle de Francotirador |
+| 5 | Explosivo, pickups de Lanzacohetes |
+| 7 | Élite |
 
-## 📊 Datos
+### Capa 2: director de ritmo (`DifficultyManager.DirectorState`)
 
-Cada evaluación se guarda en un CSV local (`difficulty_sessions.csv`, en la carpeta de datos persistentes de Unity) con: kills y daño de la ventana, precisión acumulada, el score calculado, y los parámetros de dificultad resultantes. Esto es el dataset que va a alimentar la siguiente fase del proyecto — reemplazar las reglas fijas por un modelo entrenado con partidas reales.
+Una máquina de estados explícita — `Valley -> Rising -> Climax -> Falling -> Valley` — reevaluada cada 2 s (no en cada frame), que modula `SpawnIntervalMultiplier` sobre el intervalo de aparición base:
 
-## ✨ Qué hay en el juego
+| Estado | Multiplicador de spawn | Condición de salida |
+|---|---|---|
+| Valley | x1.35 (respiro) | `skill_factor >= 0.55` tras un mínimo de 10 s |
+| Rising | x1.0 | 20 s transcurridos, o `skill_factor >= 0.8` |
+| Climax | x0.65 (pico, +3 al techo de enemigos concurrentes, composición sesgada a tipos más amenazantes) | 25 s transcurridos |
+| Falling | x1.1 | 12 s transcurridos |
 
-- **Menú principal:** título, controles y los mejores resultados guardados localmente (puntaje, racha, nivel y tiempo de supervivencia), con botón de Jugar.
-- **HUD en vivo:** vida, puntaje/combo, cronómetro, y un panel de telemetría que muestra en tiempo real lo que la IA de dificultad está haciendo (nivel, velocidad/vida de enemigos, intervalo de spawn, precisión, enemigos activos), con avisos cuando la dificultad sube o baja.
-- **4 armas:** Pistola (infinita), Escopeta (más daño de cerca por perdigón, cae con la distancia), Lanzallamas (daño continuo en cono) y Lanzacohetes (explota en área). Las especiales se consiguen recogiéndolas del mapa.
-- **Mascota aliada:** un compañero que orbita al jugador y dispara solo a los enemigos cercanos. Se recoge del suelo (aparece al azar o como premio por una buena racha de combo) y recogerla de nuevo renueva su duración.
-- **Jefes:** aparecen cada cierto tiempo (con aviso previo), con vida/daño escalados según la dificultad actual, un patrón de disparo radial, barra de vida propia en el HUD y una bonificación de puntaje al derrotarlos.
-- **Perks roguelite:** cada vez que la IA sube a un nivel de dificultad par, o al derrotar un jefe, el juego se pausa y ofrece elegir 1 de 3 mejoras (más daño, cadencia, vida, velocidad, vampirismo, mascota más fuerte, armadura, y más) que se acumulan durante la partida.
-- **Audio:** todos los efectos de sonido (disparos por arma, impactos, explosiones, pickups, cambios de dificultad, alarma de jefe, etc.) se generan por código con osciladores simples, sin archivos de audio externos.
-- **Ambientación reactiva:** la iluminación global de la escena se va tiñendo de un celeste calmado a un rojo intenso a medida que sube el nivel de dificultad.
-- **Obstáculos y mapa:** rocas/cajas repartidas por todo el mapa que bloquean el paso, para darle forma táctica a la arena.
-- **Juice visual:** screen shake, flashes de impacto, partículas de golpe/muerte, texto de daño flotante, animación de aparición de enemigos — todo generado por código en tiempo de ejecución, sin depender de assets de arte.
+Desde `Rising` o `Climax`, si `skill_factor <= 0.25` el director salta directo a `Falling` — una válvula de alivio para no ahogar a un jugador que está sufriendo, independiente del temporizador de estado.
 
-## 🏗️ Arquitectura
+### Telemetría (`PlayerTelemetryTracker`)
+
+Calcula `skill_factor` (0-1, suavizado por interpolación para evitar saltos bruscos) cada `windowSeconds` (12 s), combinando:
+
+- Precisión acumulada (proyectiles disparados vs. impactos).
+- Salud actual como fracción del máximo.
+- Ritmo de eliminaciones respecto a un valor de referencia por ventana.
+- Movilidad: distancia recorrida por segundo, calculada sobre un buffer circular de 8 muestras de posición (sin `List<>` ni LINQ, para no generar basura en `Update`). Un valor bajo marca al jugador como "campeando" (`IsPlayerCamping`), señal que consumen directamente algunos enemigos y el jefe (ver más abajo) sin pasar por `DifficultyManager`.
+
+`skill_factor` se reporta a `DifficultyManager` (`ReportSkillFactor`), que lo usa tanto para las transiciones de estado como para afinar `blended_score` en la capa 1.
+
+## Sistemas de juego
+
+### Armas (5, tecla 1-5)
+
+| Arma | Comportamiento | Desbloqueo |
+|---|---|---|
+| Pistola | Munición infinita, daño base | Desde el inicio |
+| Escopeta | 6 perdigones en abanico, daño con caída por distancia recorrida | Nivel 3 (pickup) |
+| Lanzallamas | Daño continuo por tick dentro de un cono frente a la nave | Nivel 3 (pickup) |
+| Rifle de francotirador | Un solo proyectil, alto daño, cadencia lenta | Nivel 4 (pickup) |
+| Lanzacohetes | Proyectil explosivo con daño en área | Nivel 5 (pickup) |
+
+### Enemigos (6 arquetipos)
+
+Cada arquetipo aplica multiplicadores sobre las stats base que ya calcula `DifficultyManager` (`EnemyArchetype`), de forma que la IA de dificultad sigue controlando la potencia general y el arquetipo solo cambia el comportamiento.
+
+| Enemigo | Rasgo |
+|---|---|
+| Devorador | Persecución directa, arquetipo base |
+| Enjambre | Alta velocidad, baja vida |
+| Escupidor | Mantiene distancia y dispara proyectiles; si detecta al jugador campeando, dispara en abanico de 3 en vez de un tiro directo |
+| Behemoth | Alta vida y daño de contacto, baja velocidad |
+| Explosivo | Corre hacia el jugador y detona en área al llegar (o al morir por cualquier otra causa) |
+| Élite | Velocidad, vida y daño por encima del promedio; combina rasgos de varios arquetipos |
+
+### Jefes (`BossDirector`, `BossController`)
+
+Aparecen cada 90 s (60 s la primera vez), con aviso previo. Sus stats escalan sobre los valores actuales de `DifficultyManager`. Además del estallido de proyectiles radial periódico, si detectan camping disparan una andanada apuntada directo a la posición del jugador. Otorgan una bonificación fija de puntaje al ser derrotados y disparan la oferta de un perk.
+
+### Perks (`PerkDatabase`, `PerkManager`, `PerkEffects`)
+
+Cada vez que el nivel de dificultad sube a un número par, o se derrota un jefe, la partida se pausa y se ofrecen 3 mejoras al azar de un catálogo de 10 (cadencia de disparo, daño, vida máxima, curación, velocidad de movimiento, daño del dron, vampirismo, multiplicador de puntaje, reducción de daño recibido, munición extra por recogida). Los efectos son multiplicadores globales acumulables entre sí, reseteados al empezar una partida nueva.
+
+### Dron aliado (`PetCompanion`, `PetPickup`, `PetPickupSpawner`)
+
+Recogible del suelo (aparición periódica o como premio por una racha de combo). Hasta 3 drones simultáneos, orbitando al jugador y disparando solos al enemigo más cercano dentro de su rango. Cada dron tiene una duración limitada; recoger otro mientras ya se está en el máximo renueva la duración de todos en vez de sumar uno nuevo.
+
+### Economía de recompensas
+
+Los recogibles de armas y del dron ajustan su intervalo de aparición según `skill_factor`: más frecuentes si el jugador está sufriendo, al ritmo base si está dominando — una capa simple de riesgo/recompensa sobre el mismo director de dificultad.
+
+## Notas de implementación
+
+- **Sin assets externos.** Todos los sprites (`ProceduralSprites`), el fondo de estrellas con paralaje (`ArenaBackground`) y los efectos de sonido (`AudioKit`, osciladores + ruido generados por código) se construyen en tiempo de ejecución. No hay archivos de imagen ni de audio en el proyecto.
+- **Todo se arma por código.** `GameBootstrapper` construye HUD, spawners y sistemas al iniciar la escena; no depende de objetos preconfigurados a mano en el editor. Como `RuntimeInitializeOnLoadMethod` solo se ejecuta una vez por sesión del juego (no una vez por escena), también se suscribe a `SceneManager.sceneLoaded` para reconstruir todo al reiniciar tras morir.
+- **Bajo acoplamiento por eventos.** La comunicación entre sistemas usa `System.Action` (`PlayerHealth.OnHealthChanged`, `DifficultyManager.OnDifficultyChanged`/`OnStateChanged`, `Enemy.OnDied`, `GameManager.OnScoreChanged`, etc.) o métodos de registro directo (`RegisterShotFired`, `ReportSkillFactor`) sobre los singletons existentes, en vez de referencias cruzadas entre componentes.
+- **Disciplina de asignaciones.** El muestreo de movilidad de `PlayerTelemetryTracker` usa un array circular de tamaño fijo en vez de listas dinámicas o LINQ, para no generar basura en cada frame.
+- **Cámara y disparo.** La cámara hace scroll continuo hacia arriba (sin seguir al jugador); el movimiento queda acotado al área visible. El disparo no depende del mouse: todas las armas apuntan hacia adelante por diseño.
+
+## Datos
+
+Cada evaluación de `DifficultyManager` se agrega a un CSV local (`difficulty_sessions.csv`, en `Application.persistentDataPath`) con: eliminaciones y daño de la ventana, precisión acumulada, `performance_score`, los parámetros de dificultad resultantes, el estado del director de ritmo y el `skill_factor` del momento. Es el dataset planeado para la siguiente fase del proyecto: reemplazar las reglas fijas por un modelo entrenado con partidas reales.
+
+## Arquitectura de scripts
 
 | Categoría | Scripts | Responsabilidad |
 |---|---|---|
-| Core | `GameBootstrapper`, `GameManager`, `DifficultyManager`, `HighScoreManager` | Arman la partida al vuelo (HUD, fondo, spawners, EventSystem), llevan puntaje/combo/game-over, centralizan las métricas + reglas de dificultad (con logging a CSV), y guardan los mejores resultados en PlayerPrefs |
-| Jugador | `PlayerMovement`, `PlayerShooting`, `PlayerHealth`, `CameraFollow` | Movimiento y apuntado, disparo por arma, vida, cámara con seguimiento y screen shake |
-| Armas | `WeaponData`, `Projectile`, `WeaponPickup`, `WeaponPickupSpawner` | Stats de cada arma (daño, caída por distancia, si explota), proyectiles, y sus recogibles en el mapa |
-| Enemigos | `EnemyData`, `Enemy`, `EnemySpawner`, `EnemyProjectile` | Arquetipos (rastreador/corredor/tirador/bruto), spawn y desbloqueo según dificultad, IA de persecución/distancia y disparo a distancia |
-| Jefes | `BossDirector`, `BossController` | Decide cuándo aparece un jefe y arma el encuentro (aviso, stats escaladas); patrón de disparo radial y aviso de derrota |
-| Perks | `PerkEffects`, `PerkDatabase`, `PerkManager` | Multiplicadores globales de la run, catálogo de mejoras elegibles, y cuándo ofrecerlas (nivel par o jefe derrotado) |
-| Mascota | `PetCompanion`, `PetProjectile`, `PetPickup`, `PetPickupSpawner` | Compañero que sigue y dispara solo, y sus recogibles (aleatorios o por combo) |
-| Mapa | `ArenaBackground`, `ObstacleField`, `MapUtility`, `DifficultyAmbiance` | Fondo procedural, obstáculos repartidos por toda el área visible, y el tinte de luz según dificultad |
-| Audio | `AudioKit`, `SoundManager` | Generación de SFX por osciladores/ruido y el pool de reproducción |
-| UI y efectos | `HUDController`, `UIKit`, `ProceduralSprites`, `HitEffects`, `DebrisFX`, `FloatingUIText`, `BlinkText` | HUD completo (incluye menú principal, elección de perks y barra de jefe) construido por código, generación de sprites/paneles/botones en runtime, partículas y texto flotante |
+| Core | `GameBootstrapper`, `GameManager`, `HighScoreManager` | Arman la partida al vuelo; puntaje, combo y estado de partida; mejores resultados en `PlayerPrefs` |
+| Dificultad | `DifficultyManager`, `PlayerTelemetryTracker`, `DifficultyAmbiance` | Progresión estructural + director de ritmo; cálculo de `skill_factor`; tinte de iluminación según nivel |
+| Jugador | `PlayerMovement`, `PlayerShooting`, `PlayerHealth`, `CameraFollow` | Movimiento acotado a pantalla, disparo por arma, vida, scroll automático de cámara |
+| Armas | `WeaponData`, `Projectile`, `WeaponPickup`, `WeaponPickupSpawner` | Stats de cada arma, proyectiles, recogibles |
+| Enemigos | `EnemyData`, `Enemy`, `EnemySpawner`, `EnemyProjectile` | Arquetipos, spawn y desbloqueo según dificultad, comportamiento reactivo a telemetría |
+| Jefes | `BossDirector`, `BossController` | Cadencia de aparición, patrón de disparo radial y andanada dirigida |
+| Perks | `PerkEffects`, `PerkDatabase`, `PerkManager` | Multiplicadores de la run, catálogo de mejoras, cuándo ofrecerlas |
+| Dron | `PetCompanion`, `PetProjectile`, `PetPickup`, `PetPickupSpawner` | Compañero que sigue y dispara solo; recogibles |
+| Mapa / ambiente | `ArenaBackground`, `MapUtility`, `ObstacleMarker` | Fondo de estrellas con paralaje; punto de spawn relativo a cámara |
+| Audio | `AudioKit`, `SoundManager` | Síntesis de efectos por código; pool de reproducción |
+| UI y efectos | `HUDController`, `UIKit`, `ProceduralSprites`, `HitEffects`, `DebrisFX`, `FloatingUIText`, `BlinkText` | HUD (menú, panel de telemetría, elección de perks, barra de jefe), generación de sprites/paneles/botones en runtime, partículas |
 
-## 🛠️ Tech stack
+## Stack técnico
 
-- Unity 6 (C#)
-- Git LFS para assets
-- *(Próximamente)* Python + pandas para análisis de datos, scikit-learn para el modelo
+- Unity 6 (6000.5.8f1), C#
+- Universal Render Pipeline (2D)
+- Sin dependencias de terceros para arte o audio
 
-## 🚀 Roadmap
+## Roadmap
 
 - [x] Movimiento, disparo y combate básico
-- [x] Enemigos y sistema de oleadas
+- [x] Enemigos y aparición continua
 - [x] Dificultad adaptativa basada en reglas
 - [x] Logging de datos de sesión a CSV
-- [x] HUD en pantalla mostrando la dificultad ajustándose en vivo
-- [x] Sistema de armas, mascota aliada y variedad de enemigos
-- [x] Jefes cada cierto tiempo, con aviso previo, barra de vida y bonificación de puntaje
-- [x] Sistema de perks tipo roguelite (elegir mejora al subir de nivel o matar un jefe)
-- [x] Audio: SFX generados por código para disparos, impactos, pickups y cambios de dificultad
-- [x] Menú principal + high score guardado localmente
-- [x] Tinte/iluminación de escena que reacciona al nivel de dificultad (usando la Global Light 2D)
+- [x] HUD con panel de telemetría en vivo
+- [x] Sistema de armas, dron aliado y variedad de enemigos
+- [x] Jefes con aviso previo, barra de vida y bonificación de puntaje
+- [x] Perks tipo roguelite
+- [x] Audio generado por código
+- [x] Menú principal y mejores resultados locales
+- [x] Iluminación reactiva al nivel de dificultad
+- [x] Director de ritmo (Tensión/Valle/Clímax) impulsado por telemetría del jugador
+- [x] Conversión a shoot 'em up vertical con scroll de cámara automático
 - [ ] Análisis exploratorio de los datos con Python
-- [ ] Modelo de ML que prediga el nivel de habilidad del jugador
+- [ ] Modelo de ML que prediga el nivel de habilidad del jugador y reemplace las reglas actuales
 - [ ] Build jugable en itch.io
 
-## ▶️ Cómo correrlo
+## Cómo ejecutarlo
 
-1. Clonar el repo
-2. Abrir con Unity Hub (versión 6000.5.8f1 o superior)
-3. Abrir la escena en `Assets/Scenes/SampleScene.unity`
-4. Play
+1. Clonar el repositorio.
+2. Abrir con Unity Hub (versión 6000.5.8f1 o superior).
+3. Abrir la escena en `Assets/Scenes/SampleScene.unity`.
+4. Play.
 
-*(Próximamente: link a build jugable en el navegador)*
-
-## 👤 Autor
+## Autor
 
 Fabrizio — [LinkedIn](#) · [GitHub](#)
-<!-- TODO: agregar tus links reales -->
+<!-- TODO: agregar los links reales -->
